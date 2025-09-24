@@ -1,0 +1,197 @@
+version: '3.8'
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: pkb
+      POSTGRES_PASSWORD: pkb
+      POSTGRES_DB: pkb
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-pgvector.sql:/docker-entrypoint-initdb.d/init-pgvector.sql
+    networks: [internal]
+
+  redis:
+    image: redis:7
+    networks: [internal]
+
+  # MaxKB 独立服务 - 与 PKB 无依赖关系
+  maxkb:
+    image: registry.fit2cloud.com/maxkb/maxkb:latest
+    ports:
+      - "127.0.0.1:7861:8080"             # 独立端口，可通过 Nginx 反代访问
+    volumes:
+      - maxkb_data:/opt/maxkb             # 使用 Docker volume 而不是主机路径
+    restart: always
+    networks: [internal]
+    # 注意：MaxKB 完全独立，不依赖其他服务
+
+  pkb-backend:
+    build: ../backend
+    env_file: .env
+    environment:
+      # Turing 平台 API 配置
+      - TURING_API_KEY=${TURING_API_KEY}
+      - TURING_API_BASE=${TURING_API_BASE}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL}
+      - QA_MODEL=${QA_MODEL}
+      - CLASSIFICATION_MODEL=${CLASSIFICATION_MODEL:-turing/gpt-4o-mini}
+      - VISION_MODEL=${VISION_MODEL:-turing/gpt-4o-mini}
+      # 数据库配置
+      - POSTGRES_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      # Nextcloud WebDAV 配置
+      - NC_URL=${NC_WEBDAV_URL}
+      - NC_USER=${NC_USER}
+      - NC_PASS=${NC_PASS}
+      # 本地 Embedding 配置
+      - USE_LOCAL_EMBEDDING=${USE_LOCAL_EMBEDDING:-false}
+    depends_on: [postgres, redis]         # 只依赖 postgres 和 redis
+    ports:
+      - "127.0.0.1:8002:8000"
+    networks: [internal]
+    restart: unless-stopped
+
+  # Celery Worker - Quick Queue (高优先级快速处理)
+  pkb-worker-quick:
+    build: ../backend
+    command: ["bash","-lc","celery -A app.workers.celery_app worker -Q quick -l info --concurrency=4"]
+    env_file: .env
+    environment:
+      # Turing 平台 API 配置
+      - TURING_API_KEY=${TURING_API_KEY}
+      - TURING_API_BASE=${TURING_API_BASE}
+      - CLASSIFICATION_MODEL=${CLASSIFICATION_MODEL:-turing/gpt-4o-mini}
+      - VISION_MODEL=${VISION_MODEL:-turing/gpt-4o-mini}
+      # 数据库配置
+      - POSTGRES_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+    depends_on: [pkb-backend, redis, postgres]
+    networks: [internal]
+    restart: unless-stopped
+
+  # Celery Worker - Classify Queue (AI分类处理)
+  pkb-worker-classify:
+    build: ../backend
+    command: ["bash","-lc","celery -A app.workers.celery_app worker -Q classify -l info --concurrency=2"]
+    env_file: .env
+    environment:
+      # Turing 平台 API 配置
+      - TURING_API_KEY=${TURING_API_KEY}
+      - TURING_API_BASE=${TURING_API_BASE}
+      - CLASSIFICATION_MODEL=${CLASSIFICATION_MODEL:-turing/gpt-4o-mini}
+      - VISION_MODEL=${VISION_MODEL:-turing/gpt-4o-mini}
+      # 数据库配置
+      - POSTGRES_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+    depends_on: [pkb-backend, redis, postgres]
+    networks: [internal]
+    restart: unless-stopped
+
+  # Celery Worker - Heavy Queue (向量化等重型任务)
+  pkb-worker-heavy:
+    build: ../backend
+    command: ["bash","-lc","celery -A app.workers.celery_app worker -Q heavy,ingest -l info --concurrency=2"]
+    env_file: .env
+    environment:
+      # Turing 平台 API 配置
+      - TURING_API_KEY=${TURING_API_KEY}
+      - TURING_API_BASE=${TURING_API_BASE}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL}
+      # 数据库配置
+      - POSTGRES_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      # 本地 Embedding 配置
+      - USE_LOCAL_EMBEDDING=${USE_LOCAL_EMBEDDING:-false}
+    depends_on: [pkb-backend, redis, postgres]
+    networks: [internal]
+    restart: unless-stopped
+
+  nextcloud:
+    image: nextcloud:apache
+    depends_on: [postgres, redis]        # 不依赖 MaxKB
+    ports:
+      - "127.0.0.1:8080:80"            # 宿主 8080 → 容器 80（供 Nginx 反代）
+    environment:
+      # 数据库（使用你现有的 postgres 服务）
+      - POSTGRES_HOST=postgres
+      - POSTGRES_DB=nextcloud
+      - POSTGRES_USER=nextcloud
+      - POSTGRES_PASSWORD=nextcloud
+
+      # Redis（文件锁提升性能；使用你现有 redis）
+      - REDIS_HOST=redis
+      # 如你的 redis 无密码，可不设 REDIS_HOST_PASSWORD
+
+      # 反代/域名（重要）
+      - NEXTCLOUD_TRUSTED_DOMAINS=nextcloud.kmchat.cloud
+      - OVERWRITEHOST=nextcloud.kmchat.cloud
+      - OVERWRITEPROTOCOL=https
+      # 如 Nginx 有设置 X-Forwarded-For/Proto（你已有），即可正确识别 HTTPS
+
+      # 可选优化
+      - PHP_MEMORY_LIMIT=1G
+      - PHP_UPLOAD_LIMIT=512M
+    volumes:
+      - nextcloud_data:/var/www/html       # 包含应用+数据（PoC 简化）
+    restart: unless-stopped
+    networks: [internal]
+
+  # Nextcloud 定时任务（5 分钟频率）
+  nextcloud-cron:
+    image: nextcloud:apache
+    user: www-data
+    entrypoint:
+      - sh
+      - -c
+      - |
+        echo 'Starting Nextcloud custom cron (5-minute interval)...'
+        while true; do
+          echo "$$(date): Running Nextcloud cron.php..."
+          php /var/www/html/cron.php
+          echo "$$(date): Nextcloud cron completed, sleeping for 5 minutes..."
+          sleep 300
+        done
+    depends_on: [nextcloud]
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_DB=nextcloud
+      - POSTGRES_USER=nextcloud
+      - POSTGRES_PASSWORD=nextcloud
+      - REDIS_HOST=redis
+    volumes:
+      - nextcloud_data:/var/www/html
+    restart: unless-stopped
+    networks: [internal]
+
+  # PKB 自动扫描定时任务（每 5 分钟）
+  pkb-auto-scan:
+    image: curlimages/curl:latest
+    entrypoint:
+      - sh
+      - -c
+      - |
+        echo 'PKB Auto Scan Service Started (5-minute interval)'
+        while true; do
+          echo "$$(date): Running PKB auto scan..."
+          response=$$(curl -s -X POST http://pkb-backend:8000/api/ingest/scan 2>&1)
+          if echo "$$response" | grep -q '"status":"ok"'; then
+            echo "$$(date): PKB scan completed successfully: $$response"
+          else
+            echo "$$(date): PKB scan failed or no new files: $$response"
+          fi
+          echo "$$(date): Sleeping for 5 minutes..."
+          sleep 300
+        done
+    depends_on: [pkb-backend]
+    networks: [internal]
+    restart: unless-stopped
+
+networks:
+  internal:
+
+volumes:
+  pgdata:
+  nextcloud_data:
+  maxkb_data:                             # MaxKB 独立数据卷
+

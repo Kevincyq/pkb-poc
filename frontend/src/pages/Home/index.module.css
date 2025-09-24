@@ -1,0 +1,36 @@
+.header {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+}
+
+.title {
+  margin: 0 !important;
+  font-size: 18px;
+  font-weight: 500;
+  color: #333;
+}
+
+.actions {
+  display: flex;
+  gap: 16px;
+}
+
+.icon {
+  font-size: 20px;
+  color: #333;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 50%;
+  transition: all 0.3s;
+}
+
+.icon:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+.cardGrid {
+  width: 100%;
+}

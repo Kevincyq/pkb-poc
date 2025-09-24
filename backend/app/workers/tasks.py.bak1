@@ -1,0 +1,155 @@
+import os
+import requests
+from datetime import datetime
+from .celery_app import celery_app
+from app.adapters import maxkb
+import asyncio
+
+
+
+# 入口任务：从 WebDAV 取文件、入库，然后投递到 embed
+@celery_app.task(name="app.workers.tasks.ingest_file", queue="ingest")
+def ingest_file(path: str):
+    # TODO: 这里应该先从WebDAV下载文件内容，然后再传递给embed_and_index
+    # 目前这个任务可能不被使用，建议暂时返回成功
+    print(f"ingest_file called with path: {path}")
+    return {"ok": True, "message": "ingest_file not implemented yet"}
+
+
+@celery_app.task(name="app.workers.tasks.embed_and_index", queue="embed")
+def embed_and_index(text: str, meta: dict = None):
+    if meta is None:
+        meta = {}
+    
+    # 添加详细的调试信息
+    print(f"🔍 embed_and_index 收到参数:")
+    print(f"  text 类型: {type(text)}")
+    print(f"  text 长度: {len(text) if isinstance(text, str) else 'N/A'}")
+    print(f"  meta 内容: {meta}")
+    
+    # MaxKB 配置（基于抓包信息）
+    maxkb_base_url = "https://kb.kmchat.cloud"
+    maxkb_api_key = os.getenv("MAXKB_API_KEY", "")
+    # 从抓包中获取的知识库 ID
+    maxkb_knowledge_id = "01992749-c3ee-7c80-bdb1-8752f7ed8d95"
+    
+    if not maxkb_api_key:
+        print("MaxKB API Key 未配置，跳过同步")
+        return {"ok": True, "skipped": "MaxKB API Key not configured"}
+    
+    # 构造文档数据
+    if isinstance(meta, dict):
+        title = meta.get('title', '未知文档')
+        source_uri = meta.get('source_uri', '未知来源')
+    else:
+        title = '未知文档'
+        source_uri = str(meta) if meta else '未知来源'
+   
+    try:
+        headers = {
+            "Authorization": f"Bearer {maxkb_api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        # 基于日志结果，直接使用有效的端点
+        effective_endpoints = [
+            {
+                "url": f"{maxkb_base_url}/api/knowledge/{maxkb_knowledge_id}/document/",
+                "method": "POST",
+                "payload": {
+                    "name": title,
+                    "content": text,
+                    "type": "text",
+                    "meta": {
+                        "source_uri": source_uri,
+                        "sync_from": "pkb"
+                    }
+                }
+            },
+            {
+                "url": f"{maxkb_base_url}/api/dataset/{maxkb_knowledge_id}/document/",
+                "method": "POST", 
+                "payload": {
+                    "name": title,
+                    "content": text,
+                    "type": "text"
+                }
+            }
+        ]
+        
+        for endpoint_config in effective_endpoints:
+            try:
+                url = endpoint_config["url"]
+                payload = endpoint_config["payload"]
+                
+                print(f"📤 尝试有效端点:")
+                print(f"  URL: {url}")
+                print(f"  标题: {title}")
+                print(f"  请求体: {payload}")
+                
+                response = requests.post(url, json=payload, headers=headers, timeout=30)
+                
+                print(f"📥 MaxKB API 响应:")
+                print(f"  状态码: {response.status_code}")
+                print(f"  响应头: {dict(response.headers)}")
+                print(f"  响应内容: {response.text}")
+                print(f"  响应长度: {len(response.text)}")
+                
+                if response.status_code == 200:
+                    # 检查响应内容
+                    if response.text.strip():  # 有响应内容
+                        try:
+                            response_data = response.json()
+                            print(f"✅ MaxKB 知识库同步成功: {title}")
+                            return {
+                                "ok": True, 
+                                "maxkb_synced": True, 
+                                "title": title,
+                                "endpoint": url,
+                                "response": response_data
+                            }
+                        except Exception as json_error:
+                            print(f"JSON 解析失败: {json_error}")
+                            # 即使 JSON 解析失败，如果状态码是 200，也认为成功
+                            print(f"✅ MaxKB 知识库同步成功 (非JSON响应): {title}")
+                            return {
+                                "ok": True, 
+                                "maxkb_synced": True, 
+                                "title": title,
+                                "endpoint": url,
+                                "response": response.text
+                            }
+                    else:  # 空响应
+                        print(f"✅ MaxKB 知识库同步成功 (空响应): {title}")
+                        return {
+                            "ok": True, 
+                            "maxkb_synced": True, 
+                            "title": title,
+                            "endpoint": url,
+                            "response": "empty_response"
+                        }
+                elif response.status_code == 201:
+                    print(f"✅ MaxKB 知识库创建成功: {title}")
+                    return {
+                        "ok": True, 
+                        "maxkb_synced": True, 
+                        "title": title,
+                        "endpoint": url,
+                        "response": response.json() if response.text else "created"
+                    }
+                else:
+                    print(f"❌ 端点 {url} 失败: {response.status_code}")
+                    continue
+                    
+            except Exception as e:
+                print(f"端点 {url} 异常: {e}")
+                continue
+        
+        print(f"⚠️ 所有端点都失败")
+        return {"ok": True, "maxkb_synced": False, "error": "所有端点都失败"}
+        
+    except Exception as e:
+        print(f"MaxKB 知识库同步异常: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"ok": True, "maxkb_synced": False, "error": str(e)}

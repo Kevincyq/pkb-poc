@@ -1,0 +1,40 @@
+.documentGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+/* 桌面端：6列 */
+@media (min-width: 1200px) {
+  .documentGrid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+
+/* 平板端：4列 */
+@media (min-width: 768px) and (max-width: 1199px) {
+  .documentGrid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+/* 移动端：2列 */
+@media (max-width: 767px) {
+  .documentGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+}
+
+.container {
+  background: #fff;
+  border-radius: 8px;
+  min-height: 300px;
+  padding: 24px;
+}
+
+@media (max-width: 767px) {
+  .container {
+    padding: 16px;
+  }
+}

@@ -1,0 +1,25 @@
+# 前端React项目忽略项
+frontend/node_modules/       # 依赖包（体积大，无需跟踪）
+frontend/build/             # 打包后的生产文件（可通过代码重新构建）
+frontend/.env.local         # 本地环境变量（可能包含敏感信息）
+frontend/.env.development   # 开发环境变量
+frontend/.env.production    # 生产环境变量
+frontend/.DS_Store          # Mac系统自动生成的垃圾文件
+frontend/npm-debug.log*     # npm错误日志
+
+# 后端Python项目忽略项
+backend/__pycache__/        # Python编译缓存
+backend/venv/               # 虚拟环境（可通过requirements.txt重建）
+backend/.env                # 后端环境变量（如API密钥、数据库密码）
+backend/*.pyc               # 编译后的.pyc文件
+backend/*.pyo
+backend/*.pyd
+backend/.pytest_cache/      # 测试缓存
+
+# 部署相关忽略项（如果deploy目录有敏感信息）
+deploy/*.key                # 密钥文件
+deploy/*.log                # 日志文件（可能包含路径、数据等）
+
+# 系统通用忽略项
+.DS_Store                   # Mac
+Thumbs.db                   # Windows

@@ -1,0 +1,121 @@
+.container {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 800px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.header span {
+  font-size: 14px;
+  color: #333;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.actions button {
+  padding: 4px;
+  color: #666;
+}
+
+.messages {
+  padding: 16px;
+  max-height: 400px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.question, .answer {
+  max-width: 80%;
+}
+
+.question {
+  align-self: flex-end;
+  background: #e6f4ff;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.answer {
+  align-self: flex-start;
+  background: #f5f5f5;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.loading {
+  color: #666;
+}
+
+.loading .hint {
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
+}
+
+.messageContent {
+  white-space: pre-wrap;
+}
+
+.messageContent p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.messageActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.messageActions button {
+  color: #666;
+  font-size: 12px;
+}
+
+.inputArea {
+  padding: 16px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.inputArea :global(.ant-input) {
+  border: none;
+  border-radius: 8px;
+  background: #f5f5f5;
+  padding: 8px 12px;
+}
+
+.inputArea :global(.ant-input):focus {
+  box-shadow: none;
+}
+
+.inputArea :global(.ant-input-suffix) button {
+  border: none;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #1677ff;
+}

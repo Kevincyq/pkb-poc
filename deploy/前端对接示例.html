@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PKB智能知识库 - 前端示例</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 16px;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 20px;
+        }
+
+        .left-panel {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .right-panel {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .search-section {
+            margin-bottom: 30px;
+        }
+
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .search-box input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+        }
+
+        .search-box select {
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            min-width: 120px;
+        }
+
+        .search-box button {
+            padding: 12px 24px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .search-box button:hover {
+            background: #2980b9;
+        }
+
+        .search-box button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .search-results {
+            margin-top: 20px;
+        }
+
+        .result-item {
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+            transition: box-shadow 0.2s;
+        }
+
+        .result-item:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .result-item h3 {
+            color: #2c3e50;
+            margin-bottom: 8px;
+            font-size: 18px;
+        }
+
+        .result-item p {
+            color: #666;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+
+        .result-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 14px;
+            color: #888;
+        }
+
+        .result-meta span {
+            background: #f8f9fa;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .qa-section {
+            border-top: 1px solid #eee;
+            padding-top: 30px;
+        }
+
+        .qa-input {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .qa-input input {
+            flex: 1;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+        }
+
+        .qa-input button {
+            padding: 12px 24px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .qa-input button:hover {
+            background: #229954;
+        }
+
+        .qa-response {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 15px;
+        }
+
+        .qa-response h4 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .qa-response p {
+            line-height: 1.6;
+            margin-bottom: 15px;
+        }
+
+        .qa-sources {
+            border-top: 1px solid #dee2e6;
+            padding-top: 15px;
+        }
+
+        .qa-sources h5 {
+            color: #495057;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .source-item {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 8px 12px;
+            margin-bottom: 6px;
+            font-size: 13px;
+        }
+
+        .stats-section h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .stat-item {
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .stat-item .value {
+            display: block;
+            font-size: 24px;
+            font-weight: bold;
+            color: #3498db;
+            margin-bottom: 5px;
+        }
+
+        .stat-item .label {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .categories {
+            margin-top: 20px;
+        }
+
+        .category-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .color-indicator {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+        }
+
+        .category-item .name {
+            flex: 1;
+            font-weight: 500;
+        }
+
+        .category-item .count {
+            background: #e9ecef;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            color: #495057;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .search-box {
+                flex-direction: column;
+            }
+            
+            .qa-input {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 PKB智能知识库</h1>
+            <p>基于AI的智能文档搜索与问答系统</p>
+        </div>
+
+        <div class="main-content">
+            <div class="left-panel">
+                <!-- 搜索区域 -->
+                <div class="search-section">
+                    <h2>🔍 智能搜索</h2>
+                    <div class="search-box">
+                        <input 
+                            type="text" 
+                            id="searchInput" 
+                            placeholder="输入关键词搜索知识库..."
+                        >
+                        <select id="searchType">
+                            <option value="hybrid">混合搜索</option>
+                            <option value="keyword">关键词搜索</option>
+                            <option value="semantic">语义搜索</option>
+                        </select>
+                        <button id="searchBtn">搜索</button>
+                    </div>
+                    
+                    <div id="searchResults" class="search-results"></div>
+                </div>
+
+                <!-- 问答区域 -->
+                <div class="qa-section">
+                    <h2>🤖 智能问答</h2>
+                    <div class="qa-input">
+                        <input 
+                            type="text" 
+                            id="questionInput" 
+                            placeholder="请输入您的问题..."
+                        >
+                        <button id="askBtn">提问</button>
+                    </div>
+                    
+                    <div id="qaResponse"></div>
+                </div>
+            </div>
+
+            <div class="right-panel">
+                <!-- 统计区域 -->
+                <div class="stats-section">
+                    <h3>📊 知识库统计</h3>
+                    <div id="statsContent" class="loading">加载中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API配置
+        const API_BASE = 'https://pkb.kmchat.cloud/api';
+        
+        // 工具函数
+        function showError(container, message) {
+            container.innerHTML = `<div class="error">❌ ${message}</div>`;
+        }
+        
+        function showLoading(container, message = '加载中...') {
+            container.innerHTML = `<div class="loading">⏳ ${message}</div>`;
+        }
+        
+        // 搜索功能
+        async function performSearch() {
+            const query = document.getElementById('searchInput').value.trim();
+            const searchType = document.getElementById('searchType').value;
+            const resultsContainer = document.getElementById('searchResults');
+            
+            if (!query) {
+                showError(resultsContainer, '请输入搜索关键词');
+                return;
+            }
+            
+            showLoading(resultsContainer, '搜索中...');
+            
+            try {
+                const params = new URLSearchParams({
+                    q: query,
+                    search_type: searchType,
+                    top_k: '8'
+                });
+                
+                const response = await fetch(`${API_BASE}/search/?${params}`);
+                const data = await response.json();
+                
+                if (data.results && data.results.length > 0) {
+                    resultsContainer.innerHTML = data.results.map(result => `
+                        <div class="result-item">
+                            <h3>${result.title}</h3>
+                            <p>${result.summary || result.text.substring(0, 200) + '...'}</p>
+                            <div class="result-meta">
+                                <span>相关度: ${(result.score * 100).toFixed(1)}%</span>
+                                <span>类型: ${result.modality}</span>
+                                ${result.categories ? `<span>分类: ${result.categories.join(', ')}</span>` : ''}
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    resultsContainer.innerHTML = '<div class="loading">未找到相关内容</div>';
+                }
+            } catch (error) {
+                showError(resultsContainer, '搜索失败，请稍后重试');
+                console.error('Search error:', error);
+            }
+        }
+        
+        // 问答功能
+        async function askQuestion() {
+            const question = document.getElementById('questionInput').value.trim();
+            const responseContainer = document.getElementById('qaResponse');
+            
+            if (!question) {
+                showError(responseContainer, '请输入您的问题');
+                return;
+            }
+            
+            showLoading(responseContainer, 'AI正在思考...');
+            
+            try {
+                const response = await fetch(`${API_BASE}/qa/ask`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        question: question,
+                        top_k: 5
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.answer) {
+                    let sourcesHtml = '';
+                    if (data.sources && data.sources.length > 0) {
+                        sourcesHtml = `
+                            <div class="qa-sources">
+                                <h5>📚 参考文档:</h5>
+                                ${data.sources.map(source => `
+                                    <div class="source-item">
+                                        <strong>${source.title}</strong> (相关度: ${(source.score * 100).toFixed(1)}%)
+                                    </div>
+                                `).join('')}
+                            </div>
+                        `;
+                    }
+                    
+                    responseContainer.innerHTML = `
+                        <div class="qa-response">
+                            <h4>🤖 AI回答:</h4>
+                            <p>${data.answer.replace(/\n/g, '<br>')}</p>
+                            ${sourcesHtml}
+                        </div>
+                    `;
+                } else {
+                    showError(responseContainer, '抱歉，我无法回答这个问题');
+                }
+            } catch (error) {
+                showError(responseContainer, '问答失败，请稍后重试');
+                console.error('QA error:', error);
+            }
+        }
+        
+        // 加载统计信息
+        async function loadStats() {
+            const statsContainer = document.getElementById('statsContent');
+            
+            try {
+                const response = await fetch(`${API_BASE}/category/stats/overview`);
+                const data = await response.json();
+                
+                const statsHtml = `
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <span class="value">${data.total_contents || 0}</span>
+                            <span class="label">总文档</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="value">${data.classified_contents || 0}</span>
+                            <span class="label">已分类</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="value">${((data.classification_rate || 0) * 100).toFixed(1)}%</span>
+                            <span class="label">分类率</span>
+                        </div>
+                    </div>
+                    
+                    <div class="categories">
+                        <h4>📂 分类分布</h4>
+                        ${(data.categories || []).map(category => `
+                            <div class="category-item">
+                                <div class="color-indicator" style="background-color: ${category.color}"></div>
+                                <span class="name">${category.name}</span>
+                                <span class="count">${category.count}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+                
+                statsContainer.innerHTML = statsHtml;
+            } catch (error) {
+                showError(statsContainer, '统计信息加载失败');
+                console.error('Stats error:', error);
+            }
+        }
+        
+        // 事件监听
+        document.addEventListener('DOMContentLoaded', function() {
+            // 搜索按钮点击
+            document.getElementById('searchBtn').addEventListener('click', performSearch);
+            
+            // 搜索输入框回车
+            document.getElementById('searchInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    performSearch();
+                }
+            });
+            
+            // 问答按钮点击
+            document.getElementById('askBtn').addEventListener('click', askQuestion);
+            
+            // 问答输入框回车
+            document.getElementById('questionInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    askQuestion();
+                }
+            });
+            
+            // 加载初始数据
+            loadStats();
+        });
+        
+        // 系统健康检查
+        async function checkHealth() {
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                
+                if (data.status === 'ok') {
+                    console.log('✅ PKB系统运行正常');
+                } else {
+                    console.warn('⚠️ PKB系统状态异常');
+                }
+            } catch (error) {
+                console.error('❌ PKB系统连接失败:', error);
+            }
+        }
+        
+        // 启动时检查系统健康
+        checkHealth();
+    </script>
+</body>
+</html>
