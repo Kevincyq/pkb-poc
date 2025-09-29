@@ -222,16 +222,23 @@ migrate_configuration() {
     # 迁移 .env 文件
     if [ "$ENV_FILE_EXISTS" = true ]; then
         log_info "迁移现有 .env 配置..."
-        cp "$CURRENT_DIR/.env" "$NEW_DEPLOY_DIR/.env"
-        log_success ".env 文件迁移完成"
+        # 检查是否使用云端配置，决定 .env 文件位置
+        if [ -f "$NEW_DEPLOY_DIR/deploy/docker-compose.cloud.yml" ]; then
+            cp "$CURRENT_DIR/.env" "$NEW_DEPLOY_DIR/deploy/.env"
+            log_success ".env 文件迁移完成: $NEW_DEPLOY_DIR/deploy/.env"
+        else
+            cp "$CURRENT_DIR/.env" "$NEW_DEPLOY_DIR/.env"
+            log_success ".env 文件迁移完成: $NEW_DEPLOY_DIR/.env"
+        fi
     else
         log_info "创建新的 .env 文件..."
         if [ -f "$NEW_DEPLOY_DIR/deploy/env.cloud.template" ]; then
-            cp "$NEW_DEPLOY_DIR/deploy/env.cloud.template" "$NEW_DEPLOY_DIR/.env"
+            cp "$NEW_DEPLOY_DIR/deploy/env.cloud.template" "$NEW_DEPLOY_DIR/deploy/.env"
+            log_warning "请编辑 $NEW_DEPLOY_DIR/deploy/.env 文件配置必要参数"
         elif [ -f "$NEW_DEPLOY_DIR/env.template" ]; then
             cp "$NEW_DEPLOY_DIR/env.template" "$NEW_DEPLOY_DIR/.env"
+            log_warning "请编辑 $NEW_DEPLOY_DIR/.env 文件配置必要参数"
         fi
-        log_warning "请编辑 $NEW_DEPLOY_DIR/.env 文件配置必要参数"
     fi
     
     log_success "配置迁移完成"
