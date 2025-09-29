@@ -1,0 +1,214 @@
+version: '3.8'
+
+# PKB 云端部署配置
+# 专为从 GitHub 自动部署设计，简化了本地开发相关的配置
+
+services:
+  # PostgreSQL 数据库 (支持向量扩展)
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: pkb
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pkb_secure_2024}
+      POSTGRES_DB: pkb
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [internal]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pkb -d pkb"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis 缓存和消息队列
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks: [internal]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # PKB 后端 API 服务
+  pkb-backend:
+    build: 
+      context: ../backend
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      # API 配置
+      - TURING_API_KEY=${TURING_API_KEY}
+      - TURING_API_BASE=${TURING_API_BASE:-https://live-turing.cn.llm.tcljd.com/api/v1}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      - QA_MODEL=${QA_MODEL:-turing/gpt-4o-mini}
+      - CLASSIFICATION_MODEL=${CLASSIFICATION_MODEL:-turing/gpt-4o-mini}
+      - VISION_MODEL=${VISION_MODEL:-turing/gpt-4o-mini}
+      
+      # 数据库配置
+      - POSTGRES_URL=postgresql://pkb:${POSTGRES_PASSWORD:-pkb_secure_2024}@postgres/pkb
+      - REDIS_URL=redis://redis:6379/0
+      
+      # Nextcloud WebDAV 配置
+      - NC_URL=${NC_WEBDAV_URL}
+      - NC_USER=${NC_USER}
+      - NC_PASS=${NC_PASS}
+      
+      # 应用配置
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DEBUG=${DEBUG:-false}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${PKB_PORT:-8002}:8000"
+    networks: [internal]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    volumes:
+      - uploads:/app/uploads
+      - thumbnails:/app/thumbnails
+
+  # Celery Worker - 快速队列 (高优先级任务)
+  pkb-worker-quick:
+    build: 
+      context: ../backend
+      dockerfile: Dockerfile
+    command: ["celery", "-A", "app.workers.celery_app", "worker", "-Q", "quick", "-l", "info", "--concurrency=4", "--max-tasks-per-child=100"]
+    env_file: .env
+    environment:
+      - TURING_API_KEY=${TURING_API_KEY}
+      - TURING_API_BASE=${TURING_API_BASE:-https://live-turing.cn.llm.tcljd.com/api/v1}
+      - CLASSIFICATION_MODEL=${CLASSIFICATION_MODEL:-turing/gpt-4o-mini}
+      - VISION_MODEL=${VISION_MODEL:-turing/gpt-4o-mini}
+      - POSTGRES_URL=postgresql://pkb:${POSTGRES_PASSWORD:-pkb_secure_2024}@postgres/pkb
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      pkb-backend:
+        condition: service_healthy
+    networks: [internal]
+    restart: unless-stopped
+    volumes:
+      - uploads:/app/uploads
+      - thumbnails:/app/thumbnails
+
+  # Celery Worker - 分类队列 (AI分类任务)
+  pkb-worker-classify:
+    build: 
+      context: ../backend
+      dockerfile: Dockerfile
+    command: ["celery", "-A", "app.workers.celery_app", "worker", "-Q", "classify", "-l", "info", "--concurrency=2", "--max-tasks-per-child=50"]
+    env_file: .env
+    environment:
+      - TURING_API_KEY=${TURING_API_KEY}
+      - TURING_API_BASE=${TURING_API_BASE:-https://live-turing.cn.llm.tcljd.com/api/v1}
+      - CLASSIFICATION_MODEL=${CLASSIFICATION_MODEL:-turing/gpt-4o-mini}
+      - VISION_MODEL=${VISION_MODEL:-turing/gpt-4o-mini}
+      - POSTGRES_URL=postgresql://pkb:${POSTGRES_PASSWORD:-pkb_secure_2024}@postgres/pkb
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      pkb-backend:
+        condition: service_healthy
+    networks: [internal]
+    restart: unless-stopped
+    volumes:
+      - uploads:/app/uploads
+      - thumbnails:/app/thumbnails
+
+  # Celery Worker - 重型队列 (向量化等重型任务)
+  pkb-worker-heavy:
+    build: 
+      context: ../backend
+      dockerfile: Dockerfile
+    command: ["celery", "-A", "app.workers.celery_app", "worker", "-Q", "heavy,ingest", "-l", "info", "--concurrency=2", "--max-tasks-per-child=20"]
+    env_file: .env
+    environment:
+      - TURING_API_KEY=${TURING_API_KEY}
+      - TURING_API_BASE=${TURING_API_BASE:-https://live-turing.cn.llm.tcljd.com/api/v1}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      - POSTGRES_URL=postgresql://pkb:${POSTGRES_PASSWORD:-pkb_secure_2024}@postgres/pkb
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      pkb-backend:
+        condition: service_healthy
+    networks: [internal]
+    restart: unless-stopped
+    volumes:
+      - uploads:/app/uploads
+      - thumbnails:/app/thumbnails
+
+  # PKB 自动扫描服务 (定时任务)
+  pkb-auto-scan:
+    image: curlimages/curl:latest
+    entrypoint:
+      - sh
+      - -c
+      - |
+        echo 'PKB Auto Scan Service Started (5-minute interval)'
+        while true; do
+          echo "$$(date): Running PKB auto scan..."
+          response=$$(curl -s -X POST http://pkb-backend:8000/api/ingest/scan 2>&1)
+          if echo "$$response" | grep -q '"status":"ok"'; then
+            echo "$$(date): PKB scan completed successfully"
+          else
+            echo "$$(date): PKB scan failed or no new files: $$response"
+          fi
+          echo "$$(date): Sleeping for 5 minutes..."
+          sleep 300
+        done
+    depends_on:
+      pkb-backend:
+        condition: service_healthy
+    networks: [internal]
+    restart: unless-stopped
+
+  # Celery 监控 (可选，用于生产环境监控)
+  celery-flower:
+    build: 
+      context: ../backend
+      dockerfile: Dockerfile
+    command: ["celery", "-A", "app.workers.celery_app", "flower", "--port=5555", "--broker=redis://redis:6379/0"]
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "${FLOWER_PORT:-5555}:5555"
+    networks: [internal]
+    restart: unless-stopped
+    profiles: ["monitoring"]  # 使用 profile 控制是否启动
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  pgdata:
+    driver: local
+  redis_data:
+    driver: local
+  uploads:
+    driver: local
+  thumbnails:
+    driver: local
