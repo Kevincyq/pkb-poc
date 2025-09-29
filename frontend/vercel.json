@@ -1,27 +1,8 @@
 {
-  "name": "pkb-frontend",
-  "version": 2,
-  "builds": [
+  "rewrites": [
     {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
-  ],
-  "env": {
-    "VITE_API_BASE_URL": "https://pkb.kmchat.cloud"
-  },
-  "functions": {
-    "app/api/**/*.js": {
-      "maxDuration": 30
-    }
-  }
+  ]
 }
