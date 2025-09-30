@@ -5,6 +5,7 @@ console.log('🔍 Environment check:', {
   'import.meta.env.DEV': import.meta.env.DEV,
   'import.meta.env.PROD': import.meta.env.PROD,
   'import.meta.env.MODE': import.meta.env.MODE,
+  'import.meta.env.VITE_API_BASE_URL': import.meta.env.VITE_API_BASE_URL,
   'window.location': window.location.href
 });
 
