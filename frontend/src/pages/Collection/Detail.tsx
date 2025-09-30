@@ -171,7 +171,7 @@ export default function CollectionDetail() {
             {previewDocument.modality === 'image' ? (
               <div>
                 <img
-                  src={`https://pkb.kmchat.cloud/api/files/thumbnail/${encodeURIComponent(previewDocument.title)}`}
+                  src={`//pkb.kmchat.cloud/api/files/thumbnail/${encodeURIComponent(previewDocument.title)}`}
                   alt={previewDocument.title}
                   style={{
                     maxWidth: '100%',

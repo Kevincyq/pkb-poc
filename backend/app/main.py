@@ -18,11 +18,17 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 临时：允许所有源进行调试
-    allow_credentials=False,  # 当使用 "*" 时必须设为 False
+    allow_origins=[
+        "https://pkb.kmchat.cloud",
+        "https://kb.kmchat.cloud",
+        "https://nextcloud.kmchat.cloud",
+        "https://pkb-poc.kmchat.cloud",  # 新的自定义域名
+        "https://pkb-frontend.vercel.app",  # 保留 Vercel 域名作为备用
+    ],
+    allow_credentials=True,  # 恢复为 True，支持 Cookie
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"],  # 暴露所有响应头
+    expose_headers=["*"],
 )
 
 

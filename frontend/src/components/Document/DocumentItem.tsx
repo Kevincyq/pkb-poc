@@ -81,8 +81,8 @@ export default function DocumentItem({ document, onClick }: DocumentItemProps) {
     }
     
     if (fileName) {
-      // 统一使用完整的后端 API URL
-      const thumbnailUrl = `https://pkb.kmchat.cloud/api/files/thumbnail/${encodeURIComponent(fileName)}`;
+      // 使用协议相对 URL，自动适配 http/https
+      const thumbnailUrl = `//pkb.kmchat.cloud/api/files/thumbnail/${encodeURIComponent(fileName)}`;
       console.log(`🖼️ Generated thumbnail URL: "${thumbnailUrl}"`);
       return thumbnailUrl;
     }

@@ -9,7 +9,8 @@ console.log('🔍 Environment check:', {
   'window.location': window.location.href
 });
 
-const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://pkb.kmchat.cloud/api';
+// 优化：使用协议相对 URL，自动适配 http/https
+const baseURL = import.meta.env.VITE_API_BASE_URL || '//pkb.kmchat.cloud/api';
 console.log('🎯 Selected baseURL:', baseURL);
 
 const api = axios.create({
