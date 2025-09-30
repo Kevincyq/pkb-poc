@@ -26,8 +26,8 @@ export interface QAAssistantActions {
 export function useQAAssistant(): QAAssistantState & QAAssistantActions {
   const [visible, setVisible] = useState(false);
   const [initialQuestion, setInitialQuestionState] = useState('');
-  const [messages, setMessages] = useState<QAMessage[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [messages] = useState<QAMessage[]>([]);
+  const [isLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const initialQuestionRef = useRef<string>('');

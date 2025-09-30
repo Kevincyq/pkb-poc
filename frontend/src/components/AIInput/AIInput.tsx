@@ -9,7 +9,7 @@ interface AIInputProps {
   onSend?: (value: string) => void; // 保持向后兼容，但现在主要用问答助理
 }
 
-export default function AIInput({ onSend }: AIInputProps) {
+export default function AIInput({ onSend: _ }: AIInputProps) {
   const [inputValue, setInputValue] = useState('');
   const inputRef = useRef<any>(null);
   const qaAssistant = useQAAssistant();
