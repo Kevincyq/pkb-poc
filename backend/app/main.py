@@ -24,8 +24,9 @@ app.add_middleware(
         "https://nextcloud.kmchat.cloud",
         "https://pkb-poc.kmchat.cloud",  # 新的自定义域名
         "https://pkb-frontend.vercel.app",  # 保留 Vercel 域名作为备用
+        "*",  # 临时：允许所有源进行调试
     ],
-    allow_credentials=True,  # 恢复为 True，支持 Cookie
+    allow_credentials=False,  # 使用 "*" 时必须为 False
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
