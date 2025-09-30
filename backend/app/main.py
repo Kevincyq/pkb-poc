@@ -22,6 +22,7 @@ app.add_middleware(
     allow_credentials=False,  # 当使用 "*" 时必须设为 False
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],  # 暴露所有响应头
 )
 
 
