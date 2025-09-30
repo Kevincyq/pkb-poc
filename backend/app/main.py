@@ -22,6 +22,7 @@ app.add_middleware(
         "https://pkb.kmchat.cloud",
         "https://kb.kmchat.cloud",
         "https://nextcloud.kmchat.cloud",
+        "https://pkb-frontend.vercel.app",  # Vercel 部署域名
     ],
     allow_credentials=True,
     allow_methods=["*"],
