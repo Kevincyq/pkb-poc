@@ -108,7 +108,7 @@ export default function DocumentCard({
     // 如果是webui上传的图片，尝试使用后端缩略图
     if (sourceUri.includes('webui://')) {
       const fileName = sourceUri.replace('webui://', '');
-      const thumbnailUrl = `/api/files/thumbnail/${encodeURIComponent(fileName)}`;
+      const thumbnailUrl = `https://pkb.kmchat.cloud/api/files/thumbnail/${encodeURIComponent(fileName)}`;
       console.log(`📸 WebUI thumbnail URL: ${thumbnailUrl}`);
       return thumbnailUrl;
     }
@@ -116,7 +116,7 @@ export default function DocumentCard({
     // 如果是nextcloud的图片，也可以尝试生成缩略图
     if (sourceUri.includes('nextcloud://')) {
       const fileName = sourceUri.replace('nextcloud://', '');
-      const thumbnailUrl = `/api/files/thumbnail/${encodeURIComponent(fileName)}`;
+      const thumbnailUrl = `https://pkb.kmchat.cloud/api/files/thumbnail/${encodeURIComponent(fileName)}`;
       console.log(`☁️ Nextcloud thumbnail URL: ${thumbnailUrl}`);
       return thumbnailUrl;
     }

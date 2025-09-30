@@ -81,12 +81,9 @@ export default function DocumentItem({ document, onClick }: DocumentItemProps) {
     }
     
     if (fileName) {
-      // 在开发环境中，img标签不会通过Vite代理，所以直接使用完整的远程URL
-      const isDev = import.meta.env.DEV;
-      const thumbnailUrl = isDev 
-        ? `https://pkb.kmchat.cloud/api/files/thumbnail/${encodeURIComponent(fileName)}`
-        : `/api/files/thumbnail/${encodeURIComponent(fileName)}`;
-      console.log(`🖼️ Generated thumbnail URL (dev=${isDev}): "${thumbnailUrl}"`);
+      // 统一使用完整的后端 API URL
+      const thumbnailUrl = `https://pkb.kmchat.cloud/api/files/thumbnail/${encodeURIComponent(fileName)}`;
+      console.log(`🖼️ Generated thumbnail URL: "${thumbnailUrl}"`);
       return thumbnailUrl;
     }
     
