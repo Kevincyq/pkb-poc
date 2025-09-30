@@ -1,33 +1,36 @@
 # PKB - Personal Knowledge Base
 
-> 🧠 个人知识库系统 - 基于 Nextcloud + PostgreSQL 的轻量级知识管理解决方案
+> 🧠 智能个人知识库系统 - 集成 AI 问答、多模态搜索、自动分类的现代化知识管理平台
 
-## 🌟 项目特色
+## 🌟 核心功能
 
-- **📁 无缝文件同步** - 基于 Nextcloud WebDAV，支持多设备文件同步
-- **🔍 智能搜索** - 多级搜索策略，支持精确匹配和模糊搜索
-- **📝 灵活摄取** - 支持手动输入、文件扫描、批量导入
+- **🤖 AI 智能问答** - 基于知识库内容的智能问答系统，支持上下文对话
+- **🔍 多模态搜索** - 支持关键词、语义和混合搜索，智能匹配相关内容
+- **📁 多源数据接入** - Nextcloud 文件同步 + WebUI 直接上传 + 批量文件处理
+- **🏷️ 自动分类系统** - AI 驱动的内容自动分类和标签生成
+- **📚 自建合集管理** - 用户自定义知识合集，灵活组织内容
+- **🎯 缩略图生成** - 图片文件自动生成缩略图，优化浏览体验
 - **⚡ 异步处理** - Celery 任务队列，支持大文件和批量处理
-- **🐳 容器化部署** - Docker Compose 一键部署，开箱即用
-- **🔧 API 优先** - RESTful API 设计，易于集成和扩展
+- **🌐 现代化界面** - React + Ant Design 构建的响应式 Web 界面
+- **🐳 容器化部署** - Docker Compose 一键部署，支持云端和本地部署
 
 ## 🏗️ 系统架构
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Nextcloud     │    │   PKB Backend   │    │   PostgreSQL    │
-│  (文件同步)      │◄──►│   (API服务)      │◄──►│   (数据存储)     │
+│  React Frontend │    │   PKB Backend   │    │  PostgreSQL     │
+│  (Web界面)       │◄──►│   (FastAPI)     │◄──►│ (数据+向量存储)  │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         │              ┌─────────────────┐              │
-         │              │   Celery        │              │
-         └──────────────►│  (异步任务)      │◄─────────────┘
-                        └─────────────────┘
-                                 │
-                        ┌─────────────────┐
-                        │     Redis       │
-                        │   (任务队列)     │
-                        └─────────────────┘
+                                │                       │
+         ┌─────────────────┐    │              ┌─────────────────┐
+         │   Nextcloud     │    │              │   Celery        │
+         │  (文件同步)      │◄───┼──────────────►│  (异步任务)      │
+         └─────────────────┘    │              └─────────────────┘
+                                │                       │
+                       ┌─────────────────┐     ┌─────────────────┐
+                       │  AI Services    │     │     Redis       │
+                       │ (GPT-4o/Turing) │     │   (缓存+队列)    │
+                       └─────────────────┘     └─────────────────┘
 ```
 
 ## 🚀 快速开始
@@ -35,13 +38,14 @@
 ### 环境要求
 
 - Docker & Docker Compose
-- 2GB+ 内存
-- 10GB+ 磁盘空间
+- 4GB+ 内存 (推荐 8GB)
+- 20GB+ 磁盘空间
+- 支持的操作系统：Linux、macOS、Windows
 
 ### 1. 克隆项目
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/Kevincyq/pkb-poc.git
 cd pkb-poc
 ```
 
@@ -50,29 +54,38 @@ cd pkb-poc
 创建 `deploy/.env` 文件：
 
 ```bash
-# Nextcloud WebDAV 配置
-NC_WEBDAV_URL=https://nextcloud.kmchat.cloud/remote.php/dav/files/username/PKB-Inbox/
+# AI 服务配置 (必需)
+TURING_API_KEY=your_turing_api_key
+TURING_BASE_URL=https://api.turing.com/v1
+
+# Nextcloud WebDAV 配置 (可选)
+NC_WEBDAV_URL=https://your-nextcloud.com/remote.php/dav/files/username/PKB-Inbox/
 NC_USER=your_nextcloud_username
 NC_PASS=your_nextcloud_password
-NC_EXTS=.txt,.md,.pdf
+NC_EXTS=.txt,.md,.pdf,.docx,.jpg,.png
 
 # 数据库配置
 POSTGRES_HOST=postgres
 POSTGRES_DB=pkb
 POSTGRES_USER=pkb
-POSTGRES_PASSWORD=pkb
+POSTGRES_PASSWORD=your_secure_password
 
 # Redis 配置
 REDIS_URL=redis://redis:6379/0
 
-# 可选：OpenAI API (用于未来的语义搜索)
-# OPENAI_API_KEY=your_openai_api_key
+# 应用配置
+PKB_BASE_URL=http://localhost:8002
+FRONTEND_URL=http://localhost:3000
 ```
 
 ### 3. 启动服务
 
 ```bash
 cd deploy
+# 使用云端配置启动
+docker-compose -f docker-compose.cloud.yml up -d
+
+# 或使用本地开发配置
 docker-compose up -d
 ```
 
@@ -82,18 +95,57 @@ docker-compose up -d
 # 检查服务状态
 docker-compose ps
 
-# 测试 API
+# 测试后端 API
 curl "http://localhost:8002/api/health"
+
+# 访问 Web 界面
+open http://localhost:3000
 
 # 访问 API 文档
 open http://localhost:8002/api/docs
 ```
 
+### 5. 初始化系统
+
+```bash
+# 初始化系统分类
+curl -X POST "http://localhost:8002/api/category/initialize"
+
+# 可选：扫描 Nextcloud 文件
+curl -X POST "http://localhost:8002/api/ingest/scan"
+```
+
 ## 📖 使用指南
 
-### 文档摄取
+### Web 界面操作
 
-#### 1. 手动添加备忘录
+#### 1. 访问主界面
+- 打开浏览器访问 `http://localhost:3000`
+- 主页显示所有知识合集和最近上传的文档
+
+#### 2. 上传文件
+- 在主页点击上传区域或拖拽文件
+- 支持多文件批量上传
+- 支持格式：文本、图片、PDF、Word 文档等
+
+#### 3. AI 问答
+- 在主页的问答区域输入问题
+- 系统会基于知识库内容智能回答
+- 支持上下文对话和引用来源
+
+#### 4. 搜索功能
+- 使用顶部搜索框进行全文搜索
+- 支持关键词、语义和混合搜索模式
+- 可按分类和内容类型过滤
+
+#### 5. 浏览合集
+- 点击合集卡片查看分类内容
+- 支持系统自动分类和用户自建合集
+- 可查看文档详情和缩略图
+
+### API 接口使用
+
+#### 1. 手动添加内容
 
 ```bash
 curl -X POST "http://localhost:8002/api/ingest/memo" \
@@ -106,52 +158,62 @@ curl -X POST "http://localhost:8002/api/ingest/memo" \
   }'
 ```
 
-#### 2. 扫描 Nextcloud 文件
+#### 2. 批量文件上传
 
 ```bash
-# 将文件上传到 Nextcloud 的 PKB-Inbox 文件夹
-# 然后执行扫描
-curl -X POST "http://localhost:8002/api/ingest/scan"
+curl -X POST "http://localhost:8002/api/ingest/upload_multiple_files" \
+  -F "files=@document1.pdf" \
+  -F "files=@image1.jpg" \
+  -F "files=@notes.txt"
 ```
 
-#### 3. 指定文件摄取
+#### 3. AI 问答
 
 ```bash
-curl -X POST "http://localhost:8002/api/ingest/file" \
+curl -X POST "http://localhost:8002/api/qa/ask" \
   -H "Content-Type: application/json" \
-  -d '{"path": "/path/to/document.txt"}'
+  -d '{
+    "question": "什么是 Docker？",
+    "session_id": "user_session_123",
+    "search_type": "hybrid"
+  }'
 ```
 
-### 搜索查询
-
-#### 基础搜索
+#### 4. 高级搜索
 
 ```bash
-# 英文搜索
-curl "http://localhost:8002/api/search/?q=docker&top_k=5"
-
-# 中文搜索（需要 URL 编码）
+# 混合搜索（推荐）
 curl -G "http://localhost:8002/api/search/" \
-  --data-urlencode "q=学习笔记" \
-  --data-urlencode "top_k=5"
+  --data-urlencode "q=Docker 容器" \
+  --data-urlencode "search_type=hybrid" \
+  --data-urlencode "top_k=10"
+
+# 语义搜索
+curl -G "http://localhost:8002/api/search/" \
+  --data-urlencode "q=容器化技术" \
+  --data-urlencode "search_type=semantic"
+
+# 按分类过滤
+curl -G "http://localhost:8002/api/search/" \
+  --data-urlencode "q=学习" \
+  --data-urlencode "category=科技前沿"
 ```
 
-#### 搜索结果格式
+#### 5. 分类管理
 
-```json
-{
-  "query": "docker",
-  "items": [
-    {
-      "score": 0.95,
-      "text": "Docker 是一个开源的容器化平台...",
-      "metadata": {"source_uri": "nextcloud://docker-notes.md"},
-      "title": "Docker 学习笔记",
-      "source_uri": "nextcloud://docker-notes.md"
-    }
-  ],
-  "source": "database"
-}
+```bash
+# 获取所有分类
+curl "http://localhost:8002/api/category/"
+
+# 手动分类内容
+curl -X POST "http://localhost:8002/api/category/classify" \
+  -H "Content-Type: application/json" \
+  -d '{"content_id": "content_uuid", "force_reclassify": true}'
+
+# 批量分类
+curl -X POST "http://localhost:8002/api/category/classify/batch" \
+  -H "Content-Type: application/json" \
+  -d '{"content_ids": ["uuid1", "uuid2"], "force_reclassify": false}'
 ```
 
 ### 数据库查询
@@ -182,21 +244,50 @@ SELECT
 FROM contents;
 ```
 
-## 🔧 API 接口
+## 🔧 API 接口总览
 
-### 摄取接口
+### 内容摄取接口
 
 | 端点 | 方法 | 描述 |
 |------|------|------|
-| `/api/ingest/memo` | POST | 添加备忘录 |
+| `/api/ingest/memo` | POST | 添加文本备忘录 |
 | `/api/ingest/scan` | POST | 扫描 Nextcloud 文件 |
-| `/api/ingest/file` | POST | 摄取指定文件 |
+| `/api/ingest/upload_multiple_files` | POST | 批量文件上传 |
+| `/api/document/parse-text` | POST | 解析文本内容 |
 
-### 搜索接口
+### AI 智能服务
 
 | 端点 | 方法 | 描述 |
 |------|------|------|
-| `/api/search/` | GET | 文本搜索 |
+| `/api/qa/ask` | POST | AI 智能问答 |
+| `/api/qa/generate-report` | POST | 生成智能报告 |
+| `/api/search/` | GET | 多模态搜索 |
+| `/api/embedding/` | POST | 文本向量化 |
+
+### 分类管理
+
+| 端点 | 方法 | 描述 |
+|------|------|------|
+| `/api/category/` | GET | 获取分类列表 |
+| `/api/category/initialize` | POST | 初始化系统分类 |
+| `/api/category/classify` | POST | 内容分类 |
+| `/api/category/classify/batch` | POST | 批量分类 |
+| `/api/category/{id}` | GET | 获取分类详情 |
+
+### 合集管理
+
+| 端点 | 方法 | 描述 |
+|------|------|------|
+| `/api/collection/` | GET/POST | 合集列表/创建 |
+| `/api/collection/{id}` | GET/PUT/DELETE | 合集详情/更新/删除 |
+| `/api/collection/{id}/contents` | GET | 获取合集内容 |
+
+### 文件服务
+
+| 端点 | 方法 | 描述 |
+|------|------|------|
+| `/api/files/thumbnail/{filename}` | GET | 获取缩略图 |
+| `/api/files/supported-formats` | GET | 支持的文件格式 |
 
 ### 系统接口
 
@@ -205,44 +296,83 @@ FROM contents;
 | `/api/health` | GET | 健康检查 |
 | `/api/docs` | GET | API 文档 |
 
-## 📊 数据模型
+## 📊 核心数据模型
 
-### Content (文档表)
+### Content (内容表)
 
 ```sql
 CREATE TABLE contents (
     id UUID PRIMARY KEY,
+    user_id UUID,              -- 用户ID (多用户支持)
     source_uri TEXT,           -- 来源URI
-    modality VARCHAR,          -- 模态类型 (text/image/audio/pdf)
+    modality VARCHAR,          -- 模态类型 (text/image/pdf/audio)
     title VARCHAR NOT NULL,    -- 文档标题
-    text TEXT NOT NULL,        -- 文档内容
-    meta JSON,                 -- 元数据
+    text TEXT,                 -- 文档内容
+    meta JSONB,                -- 元数据 (JSON格式)
     created_by VARCHAR,        -- 创建者
-    created_at TIMESTAMP       -- 创建时间
+    created_at TIMESTAMP,      -- 创建时间
+    updated_at TIMESTAMP       -- 更新时间
 );
 ```
 
-### Chunk (文本块表)
+### Category (分类表)
 
 ```sql
-CREATE TABLE chunks (
+CREATE TABLE categories (
     id UUID PRIMARY KEY,
-    content_id UUID REFERENCES contents(id),
-    seq INTEGER,               -- 序号
-    text TEXT NOT NULL,        -- 文本块内容
-    meta JSON,                 -- 元数据
-    created_at TIMESTAMP       -- 创建时间
+    name VARCHAR UNIQUE,       -- 分类名称
+    description TEXT,          -- 分类描述
+    icon VARCHAR,              -- 图标
+    color VARCHAR,             -- 颜色
+    is_system BOOLEAN,         -- 是否系统分类
+    created_at TIMESTAMP
 );
 ```
 
-## 🔍 搜索策略
+### Collection (合集表)
 
-PKB 采用多级搜索策略，确保搜索结果的准确性和相关性：
+```sql
+CREATE TABLE collections (
+    id UUID PRIMARY KEY,
+    user_id UUID,              -- 用户ID
+    name VARCHAR NOT NULL,     -- 合集名称
+    description TEXT,          -- 描述
+    keywords TEXT[],           -- 关键词数组
+    created_at TIMESTAMP
+);
+```
 
-1. **精确匹配** - 使用正则表达式进行精确匹配
-2. **词边界匹配** - PostgreSQL 词边界匹配
-3. **模糊匹配** - ILIKE 模式匹配
-4. **相关性评分** - 基于匹配类型计算相关性分数
+### QA History (问答历史)
+
+```sql
+CREATE TABLE qa_history (
+    id UUID PRIMARY KEY,
+    session_id VARCHAR,        -- 会话ID
+    question TEXT NOT NULL,    -- 用户问题
+    answer TEXT,               -- AI回答
+    sources JSONB,             -- 引用来源
+    model VARCHAR,             -- 使用的模型
+    created_at TIMESTAMP
+);
+```
+
+## 🔍 智能搜索系统
+
+PKB 采用先进的多模态搜索技术，提供精准的知识检索：
+
+### 搜索模式
+
+1. **关键词搜索** - 基于 PostgreSQL 全文搜索，支持中英文分词
+2. **语义搜索** - 使用向量嵌入进行语义相似度匹配
+3. **混合搜索** - 结合关键词和语义搜索，智能权重分配
+4. **图像搜索** - 支持图片内容识别和相似图片查找
+
+### AI 问答系统
+
+- **上下文理解** - 基于对话历史维护上下文
+- **来源引用** - 自动标注答案来源和相关文档
+- **多轮对话** - 支持连续问答和澄清问题
+- **智能摘要** - 自动生成文档摘要和关键信息
 
 ## 🛠️ 开发指南
 
@@ -250,63 +380,108 @@ PKB 采用多级搜索策略，确保搜索结果的准确性和相关性：
 
 ```
 pkb-poc/
-├── backend/                 # 后端服务
+├── backend/                 # 后端服务 (FastAPI)
 │   ├── app/
-│   │   ├── api/            # API 路由
-│   │   ├── adapters/       # 外部服务适配器
-│   │   ├── workers/        # Celery 任务
+│   │   ├── api/            # API 路由模块
+│   │   │   ├── qa.py       # AI 问答接口
+│   │   │   ├── search.py   # 搜索接口
+│   │   │   ├── category.py # 分类管理
+│   │   │   ├── collection.py # 合集管理
+│   │   │   ├── ingest.py   # 内容摄取
+│   │   │   └── files.py    # 文件服务
+│   │   ├── services/       # 业务逻辑服务
+│   │   ├── workers/        # Celery 异步任务
 │   │   ├── models.py       # 数据模型
 │   │   └── main.py         # 应用入口
 │   ├── Dockerfile
 │   └── requirements.txt
+├── frontend/                # 前端界面 (React)
+│   ├── src/
+│   │   ├── components/     # React 组件
+│   │   ├── pages/          # 页面组件
+│   │   ├── services/       # API 服务
+│   │   └── types/          # TypeScript 类型
+│   ├── package.json
+│   └── vite.config.ts
 ├── deploy/                  # 部署配置
-│   └── docker-compose.yml
+│   ├── docker-compose.yml
+│   ├── docker-compose.cloud.yml
+│   └── .env.template
 └── README.md
 ```
 
-### 添加新功能
+### 本地开发环境
 
-1. **新增 API 端点**：在 `backend/app/api/` 下创建新的路由文件
-2. **数据库迁移**：修改 `models.py` 并重启服务
-3. **异步任务**：在 `workers/tasks.py` 中添加新任务
-4. **外部集成**：在 `adapters/` 下创建适配器
-
-### 本地开发
+#### 后端开发
 
 ```bash
-# 安装依赖
+# 安装 Python 依赖
 cd backend
 pip install -r requirements.txt
 
-# 运行开发服务器
+# 启动开发服务器
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-# 运行 Celery Worker
+# 启动 Celery Worker (另一个终端)
 celery -A app.workers.celery_app worker -l info
 ```
 
-## 🚀 未来规划
+#### 前端开发
 
-### 短期目标 (1-2个月)
+```bash
+# 安装 Node.js 依赖
+cd frontend
+pnpm install
 
-- [ ] **语义搜索** - 集成 OpenAI Embeddings 或本地向量模型
-- [ ] **智能问答** - 基于检索的问答系统
-- [ ] **Web 界面** - 简洁的管理界面
-- [ ] **移动端 API** - 针对移动端优化的接口
+# 启动开发服务器
+pnpm dev
 
-### 中期目标 (3-6个月)
+# 构建生产版本
+pnpm build
+```
 
-- [ ] **多模态支持** - 图片、音频、视频处理
-- [ ] **自动标签** - AI 自动生成标签和分类
-- [ ] **智能提醒** - 基于内容的智能提醒系统
-- [ ] **知识图谱** - 文档间关系挖掘
+### 技术栈
 
-### 长期目标 (6个月+)
+#### 后端技术
+- **FastAPI** - 现代化 Python Web 框架
+- **PostgreSQL + pgvector** - 数据库和向量存储
+- **Celery + Redis** - 异步任务处理
+- **SQLAlchemy** - ORM 数据库操作
+- **Pydantic** - 数据验证和序列化
 
-- [ ] **Agent 系统** - 智能助手和任务自动化
-- [ ] **协作功能** - 多用户知识共享
-- [ ] **插件系统** - 第三方扩展支持
-- [ ] **移动应用** - 原生移动端应用
+#### 前端技术
+- **React 19** - 用户界面框架
+- **TypeScript** - 类型安全的 JavaScript
+- **Ant Design** - UI 组件库
+- **Vite** - 现代化构建工具
+- **React Query** - 数据获取和缓存
+
+## 🎯 当前功能状态
+
+### ✅ 已实现功能
+
+- **🤖 AI 智能问答** - 基于 GPT-4o 的智能问答系统
+- **🔍 多模态搜索** - 关键词、语义、混合搜索
+- **📁 文件上传处理** - 支持多种格式的文件上传
+- **🏷️ 自动分类** - AI 驱动的内容自动分类
+- **📚 合集管理** - 用户自定义知识合集
+- **🎯 缩略图生成** - 图片文件缩略图自动生成
+- **🌐 现代化界面** - React + Ant Design Web 界面
+- **🐳 容器化部署** - Docker 一键部署
+- **📊 向量存储** - PostgreSQL + pgvector 向量数据库
+
+### 🔄 部署方式
+
+- **本地部署** - 支持 Docker Compose 本地部署
+- **云端部署** - 支持 Vercel + 云服务器部署
+- **自动更新** - GitHub 集成的自动部署脚本
+
+### 📈 性能特点
+
+- **异步处理** - Celery 任务队列处理大文件
+- **智能缓存** - Redis 缓存提升响应速度
+- **批量操作** - 支持多文件批量上传和处理
+- **实时反馈** - WebSocket 实时任务状态更新
 
 ## 🤝 贡献指南
 
@@ -327,13 +502,25 @@ celery -A app.workers.celery_app worker -l info
 - [PostgreSQL](https://www.postgresql.org/) - 强大的开源关系数据库
 - [Celery](https://docs.celeryproject.org/) - 分布式任务队列
 
-## 📞 联系方式
+## 📞 支持与反馈
 
 如有问题或建议，请通过以下方式联系：
 
-- 创建 [Issue](../../issues)
-- 发送邮件至：[your-email@example.com]
+- 创建 [GitHub Issue](https://github.com/Kevincyq/pkb-poc/issues)
+- 查看 [项目文档](https://github.com/Kevincyq/pkb-poc)
+- 在线演示：[PKB Demo](https://pkb-poc.kmchat.cloud)
+
+## 🏆 项目亮点
+
+PKB 是一个**生产就绪**的智能知识库系统，具备以下特色：
+
+- 🧠 **AI 原生** - 深度集成 GPT-4o，提供智能问答和内容分析
+- 🔍 **搜索优先** - 多模态搜索引擎，精准匹配用户需求
+- 🎯 **用户友好** - 现代化 Web 界面，直观的操作体验
+- ⚡ **高性能** - 异步处理架构，支持大规模数据处理
+- 🐳 **易部署** - 容器化设计，一键部署到任何环境
+- 🔧 **可扩展** - 模块化架构，易于定制和扩展
 
 ---
 
-**PKB** - 让知识管理变得简单高效 🚀
+**PKB** - 下一代智能个人知识库 🚀
