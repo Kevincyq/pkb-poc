@@ -39,7 +39,12 @@ app.include_router(operator.router, prefix="/api/operator", tags=["operator"])
 
 @app.get("/", include_in_schema=False)
 def root():
-    return RedirectResponse(url="/api/docs")
+    response = RedirectResponse(url="/api/docs")
+    # 为重定向响应添加 CORS 头
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
 
 
 @app.get("/api/health")

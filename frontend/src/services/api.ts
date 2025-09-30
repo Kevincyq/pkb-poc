@@ -8,8 +8,7 @@ console.log('🔍 Environment check:', {
   'window.location': window.location.href
 });
 
-const baseURL = import.meta.env.VITE_API_BASE_URL || 
-  (import.meta.env.DEV ? '/api' : 'https://pkb.kmchat.cloud/api');
+const baseURL = import.meta.env.VITE_API_BASE_URL || 'https://pkb.kmchat.cloud/api';
 console.log('🎯 Selected baseURL:', baseURL);
 
 const api = axios.create({
