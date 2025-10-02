@@ -99,8 +99,20 @@ log_info "停止现有测试环境..."
 cd deploy
 docker-compose -p pkb-test down 2>/dev/null || true
 
-# 启动测试环境
-log_info "启动测试环境..."
+# 启动基础服务
+log_info "启动数据库和缓存服务..."
+docker-compose -f docker-compose.cloud.yml -p pkb-test up -d postgres redis
+
+# 等待数据库启动
+log_info "等待数据库启动..."
+sleep 30
+
+# 初始化数据库扩展
+log_info "初始化 pgvector 扩展..."
+docker-compose -f docker-compose.cloud.yml -p pkb-test exec -T postgres psql -U pkb -d pkb_test -c "CREATE EXTENSION IF NOT EXISTS vector;" || true
+
+# 启动所有服务
+log_info "启动完整测试环境..."
 docker-compose -f docker-compose.cloud.yml -p pkb-test up -d --build
 
 # 等待服务启动

@@ -13,6 +13,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-pkb}
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./init-postgres.sql:/docker-entrypoint-initdb.d/01-init-pgvector.sql:ro
     networks: [internal]
     restart: unless-stopped
     healthcheck:
