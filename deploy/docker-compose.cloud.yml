@@ -52,7 +52,6 @@ services:
       
       # 数据库配置
       - DATABASE_URL=postgresql://pkb:${POSTGRES_PASSWORD:-pkb_secure_2024}@postgres/${POSTGRES_DB:-pkb}
-      - DATABASE_URL=postgresql://pkb:${POSTGRES_PASSWORD:-pkb_secure_2024}@postgres/${POSTGRES_DB:-pkb}
       - POSTGRES_URL=postgresql://pkb:${POSTGRES_PASSWORD:-pkb_secure_2024}@postgres/${POSTGRES_DB:-pkb}
       - REDIS_URL=redis://redis:6379/0
       
