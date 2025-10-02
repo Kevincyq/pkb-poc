@@ -141,11 +141,6 @@ curl http://localhost:8002/api/category/
 ```bash
 # 查看所有服务状态
 docker-compose ps
-
-# 查看特定服务日志
-docker-compose logs -f pkb-worker-quick
-docker-compose logs -f pkb-worker-classify
-docker-compose logs -f pkb-worker-heavy
 ```
 
 ## 🚨 故障排除
@@ -266,5 +261,3 @@ pkb-worker-classify:
 4. 环境配置（隐藏敏感信息）
 
 ---
-
-**部署完成后，您的 PKB 系统将具备强大的智能分类能力，为用户提供更好的知识管理体验！** 🎉
