@@ -2,9 +2,9 @@
 
 ## 🎯 核心理念
 
-**"一个账号，统一知识，多种来源，无缝体验"**
+**"PKB 原生账号，多源数据集成，AI 驱动体验"**
 
-用户通过统一的 PKB 界面管理所有知识，无论文件来自 Nextcloud 云盘还是 WebUI 直接上传，都能获得一致的智能化体验。
+用户使用 PKB 独立账号系统，通过统一的智能界面管理所有知识。数据来源可以是 WebUI 上传、Nextcloud 同步、或其他云盘集成，都能获得一致的 AI 驱动体验。
 
 ## 🏗️ 统一体验架构
 
@@ -15,7 +15,7 @@
 │                                                                 │
 │  🌐 PKB Web Dashboard (统一入口)                               │
 │  │                                                             │
-│  ├── 👤 用户账号 (基于 Nextcloud 认证)                         │
+│  ├── 👤 用户账号 (PKB 原生认证系统)                            │
 │  ├── 📁 文件浏览 (所有来源统一显示)                            │
 │  ├── 🔍 智能搜索 (跨来源语义搜索)                              │
 │  ├── 🤖 AI 问答 (基于全量知识库)                               │
@@ -54,9 +54,9 @@
 │                    多源文件接入层                                │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
-│  ☁️ Nextcloud 接入                                             │
+│  ☁️ Nextcloud 集成 (可选)                                      │
 │  │                                                             │
-│  ├── 👥 用户认证 + 权限管理                                    │
+│  ├── 🔗 账号绑定 (可选集成)                                    │
 │  ├── 📁 文件存储 + 多设备同步                                  │
 │  ├── 🔄 WebDAV 扫描 + 增量同步                                 │
 │  └── 📊 文件元数据 (修改时间、设备信息等)                      │
@@ -586,58 +586,420 @@ const UnifiedFileList = () => {
 };
 ```
 
-## 🔐 统一用户体系实现
+## 🔐 分层用户体系设计
 
-### 认证流程
-```python
-class UnifiedAuthService:
-    def __init__(self):
-        self.nextcloud_client = NextcloudClient()
-        self.pkb_db = PKBDatabase()
+### 核心原则
+
+**PKB 独立账号系统 + 多源数据集成**
+
+- PKB 拥有独立的用户认证系统，不依赖任何第三方服务
+- Nextcloud 等外部服务作为可选的数据源集成
+- 用户可以选择最适合自己的数据来源组合
+
+### 用户认证架构
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    PKB 原生认证系统                              │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  🔐 主认证方式                                                  │
+│  ├── 📧 邮箱密码注册/登录                                       │
+│  ├── 🔗 OAuth 第三方登录                                       │
+│  │   ├── Google OAuth                                         │
+│  │   ├── GitHub OAuth                                         │
+│  │   └── 微信扫码登录                                          │
+│  └── 🎫 JWT Token 管理                                         │
+│                                                                 │
+│  ⚙️ 可选数据源集成                                              │
+│  ├── ☁️ Nextcloud 绑定 (文件同步)                              │
+│  ├── 📁 Google Drive 集成                                      │
+│  ├── 📦 Dropbox 连接                                           │
+│  ├── 🗂️ OneDrive 同步                                          │
+│  └── 🔌 其他 API 集成                                          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 用户数据模型
+
+```sql
+-- PKB 用户表 (主表)
+CREATE TABLE users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    username VARCHAR(100),
+    display_name VARCHAR(200),
+    avatar_url TEXT,
     
-    async def authenticate_user(self, credentials):
-        """统一认证：基于 Nextcloud，扩展到 PKB"""
-        
-        # 1. Nextcloud 认证
-        nc_user = await self.nextcloud_client.authenticate(credentials)
-        if not nc_user:
-            raise AuthenticationError("Nextcloud 认证失败")
-        
-        # 2. PKB 用户记录同步
-        pkb_user = await self.sync_pkb_user(nc_user)
-        
-        # 3. 生成统一 Token
-        token = await self.generate_unified_token(pkb_user)
-        
-        return {
-            "user": pkb_user,
-            "token": token,
-            "permissions": await self.get_user_permissions(pkb_user),
-            "preferences": await self.get_user_preferences(pkb_user)
+    -- 认证信息
+    password_hash VARCHAR(255), -- 邮箱注册用户
+    auth_provider VARCHAR(50),  -- 'email', 'google', 'github', 'wechat'
+    provider_id VARCHAR(255),   -- 第三方登录的用户ID
+    
+    -- 用户状态
+    is_active BOOLEAN DEFAULT true,
+    is_verified BOOLEAN DEFAULT false,
+    
+    -- 时间戳
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    last_login_at TIMESTAMP WITH TIME ZONE,
+    
+    CONSTRAINT unique_provider_id UNIQUE (auth_provider, provider_id)
+);
+
+-- 数据源集成表
+CREATE TABLE user_integrations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    
+    -- 集成类型
+    integration_type VARCHAR(50) NOT NULL, -- 'nextcloud', 'google_drive', 'dropbox'
+    integration_name VARCHAR(200), -- 用户自定义名称
+    
+    -- 连接配置
+    config JSONB NOT NULL DEFAULT '{}',
+    credentials JSONB DEFAULT '{}', -- 加密存储
+    
+    -- 状态
+    is_active BOOLEAN DEFAULT true,
+    last_sync_at TIMESTAMP WITH TIME ZONE,
+    sync_status VARCHAR(20) DEFAULT 'pending',
+    
+    -- 时间戳
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    CONSTRAINT unique_user_integration UNIQUE (user_id, integration_type, integration_name)
+);
+```
+
+### 认证服务实现
+
+```python
+class PKBAuthService:
+    """PKB 原生认证服务"""
+    
+    def __init__(self):
+        self.db = PKBDatabase()
+        self.jwt_service = JWTService()
+        self.oauth_providers = {
+            'google': GoogleOAuthProvider(),
+            'github': GitHubOAuthProvider(),
+            'wechat': WeChatOAuthProvider()
         }
     
-    async def sync_pkb_user(self, nc_user):
-        """同步 Nextcloud 用户到 PKB"""
-        pkb_user = await self.pkb_db.get_user_by_nc_id(nc_user.id)
+    async def register_with_email(self, email: str, password: str, display_name: str = None):
+        """邮箱注册"""
+        # 检查邮箱是否已存在
+        existing_user = await self.db.get_user_by_email(email)
+        if existing_user:
+            raise UserExistsError("邮箱已被注册")
         
-        if not pkb_user:
-            # 创建新的 PKB 用户
-            pkb_user = await self.pkb_db.create_user({
-                "nextcloud_id": nc_user.id,
-                "username": nc_user.username,
-                "email": nc_user.email,
-                "display_name": nc_user.display_name,
-                "created_at": datetime.now()
+        # 创建用户
+        user = await self.db.create_user({
+            "email": email,
+            "password_hash": self.hash_password(password),
+            "display_name": display_name or email.split('@')[0],
+            "auth_provider": "email",
+            "is_verified": False
+        })
+        
+        # 发送验证邮件
+        await self.send_verification_email(user)
+        
+        return user
+    
+    async def login_with_email(self, email: str, password: str):
+        """邮箱登录"""
+        user = await self.db.get_user_by_email(email)
+        if not user or not self.verify_password(password, user.password_hash):
+            raise AuthenticationError("邮箱或密码错误")
+        
+        if not user.is_active:
+            raise AuthenticationError("账号已被禁用")
+        
+        # 更新登录时间
+        await self.db.update_user(user.id, {"last_login_at": datetime.now()})
+        
+        # 生成 JWT Token
+        token = await self.jwt_service.generate_token(user)
+        
+        return {
+            "user": user,
+            "token": token,
+            "integrations": await self.get_user_integrations(user.id)
+        }
+    
+    async def oauth_login(self, provider: str, code: str):
+        """第三方 OAuth 登录"""
+        if provider not in self.oauth_providers:
+            raise ValueError(f"不支持的登录方式: {provider}")
+        
+        oauth_provider = self.oauth_providers[provider]
+        
+        # 获取第三方用户信息
+        oauth_user = await oauth_provider.get_user_info(code)
+        
+        # 查找或创建用户
+        user = await self.db.get_user_by_provider(provider, oauth_user.id)
+        
+        if not user:
+            # 创建新用户
+            user = await self.db.create_user({
+                "email": oauth_user.email,
+                "display_name": oauth_user.name,
+                "avatar_url": oauth_user.avatar,
+                "auth_provider": provider,
+                "provider_id": oauth_user.id,
+                "is_verified": True  # 第三方登录默认已验证
             })
         else:
-            # 更新现有用户信息
-            await self.pkb_db.update_user(pkb_user.id, {
-                "email": nc_user.email,
-                "display_name": nc_user.display_name,
-                "last_login": datetime.now()
+            # 更新用户信息
+            await self.db.update_user(user.id, {
+                "display_name": oauth_user.name,
+                "avatar_url": oauth_user.avatar,
+                "last_login_at": datetime.now()
             })
         
-        return pkb_user
+        # 生成 JWT Token
+        token = await self.jwt_service.generate_token(user)
+        
+        return {
+            "user": user,
+            "token": token,
+            "integrations": await self.get_user_integrations(user.id)
+        }
+```
+
+### 数据源集成管理
+
+```python
+class IntegrationService:
+    """数据源集成管理服务"""
+    
+    async def add_nextcloud_integration(self, user_id: str, config: dict):
+        """添加 Nextcloud 集成"""
+        # 测试连接
+        nc_client = NextcloudClient(config)
+        if not await nc_client.test_connection():
+            raise ConnectionError("Nextcloud 连接失败，请检查配置")
+        
+        # 创建集成记录
+        integration = await self.db.create_integration({
+            "user_id": user_id,
+            "integration_type": "nextcloud",
+            "integration_name": config.get("name", "我的 Nextcloud"),
+            "config": {
+                "webdav_url": config["webdav_url"],
+                "username": config["username"],
+                "sync_folders": config.get("sync_folders", ["PKB-Inbox"]),
+                "file_extensions": config.get("file_extensions", [".txt", ".md", ".pdf"])
+            },
+            "credentials": self.encrypt_credentials({
+                "password": config["password"]
+            }),
+            "is_active": True
+        })
+        
+        # 启动首次同步
+        await self.schedule_sync(integration.id)
+        
+        return integration
+    
+    async def get_user_integrations(self, user_id: str):
+        """获取用户的所有集成"""
+        integrations = await self.db.get_user_integrations(user_id)
+        
+        # 不返回敏感信息
+        return [
+            {
+                "id": integration.id,
+                "type": integration.integration_type,
+                "name": integration.integration_name,
+                "is_active": integration.is_active,
+                "last_sync": integration.last_sync_at,
+                "sync_status": integration.sync_status
+            }
+            for integration in integrations
+        ]
+
+### 用户引导流程设计
+
+```typescript
+interface UserOnboardingFlow {
+  // 第一步：账号创建
+  step1_registration: {
+    options: [
+      {
+        type: "email";
+        title: "邮箱注册";
+        description: "使用邮箱创建 PKB 账号";
+        recommended: true;
+      },
+      {
+        type: "google";
+        title: "Google 登录";
+        description: "使用 Google 账号快速登录";
+        icon: "google";
+      },
+      {
+        type: "github";
+        title: "GitHub 登录";
+        description: "使用 GitHub 账号登录";
+        icon: "github";
+      }
+    ];
+  };
+  
+  // 第二步：选择使用方式
+  step2_usage_mode: {
+    options: [
+      {
+        type: "quick_start";
+        title: "🚀 快速开始";
+        description: "直接使用 WebUI 上传文件，立即体验 AI 问答";
+        target_users: "轻量用户 (70%)";
+        setup_time: "0 分钟";
+      },
+      {
+        type: "nextcloud_integration";
+        title: "🔄 集成 Nextcloud";
+        description: "连接现有 Nextcloud，实现多设备文件同步";
+        target_users: "进阶用户 (25%)";
+        setup_time: "5 分钟";
+      },
+      {
+        type: "enterprise_setup";
+        title: "🏢 企业部署";
+        description: "团队协作和高级集成功能";
+        target_users: "企业用户 (5%)";
+        setup_time: "30 分钟";
+      }
+    ];
+  };
+  
+  // 第三步：首次体验
+  step3_first_experience: {
+    quick_start: [
+      "上传第一个文件 (拖拽或点击)",
+      "等待 AI 自动分析和分类",
+      "尝试问一个关于文件内容的问题",
+      "体验智能搜索功能"
+    ];
+    
+    nextcloud_integration: [
+      "配置 Nextcloud 连接",
+      "选择同步文件夹",
+      "等待首次同步完成",
+      "体验跨设备文件访问"
+    ];
+  };
+}
+```
+
+### 界面设计规范
+
+```typescript
+// 登录/注册界面
+interface AuthInterface {
+  layout: "center_card";
+  
+  registration_form: {
+    fields: ["email", "password", "display_name"];
+    validation: "real_time";
+    submit_button: "创建 PKB 账号";
+  };
+  
+  oauth_buttons: [
+    {
+      provider: "google";
+      style: "outline";
+      text: "使用 Google 登录";
+    },
+    {
+      provider: "github";
+      style: "outline";
+      text: "使用 GitHub 登录";
+    }
+  ];
+  
+  mode_selection: {
+    title: "选择您的使用方式";
+    cards: [
+      {
+        id: "quick_start";
+        icon: "rocket";
+        title: "快速开始";
+        description: "立即体验 AI 智能问答";
+        action: "直接进入主界面";
+      },
+      {
+        id: "setup_integrations";
+        icon: "settings";
+        title: "配置数据源";
+        description: "连接 Nextcloud 等外部服务";
+        action: "进入设置向导";
+      }
+    ];
+  };
+}
+
+// 数据源管理界面
+interface IntegrationInterface {
+  layout: "settings_page";
+  
+  integration_list: {
+    title: "数据源管理";
+    description: "连接外部服务，自动同步您的文件";
+    
+    items: [
+      {
+        type: "webui";
+        name: "WebUI 上传";
+        status: "active";
+        description: "直接在网页上传文件";
+        actions: ["查看统计"];
+        removable: false;
+      },
+      {
+        type: "nextcloud";
+        name: "Nextcloud 同步";
+        status: "disconnected";
+        description: "连接您的 Nextcloud 服务器";
+        actions: ["连接", "配置"];
+        setup_required: true;
+      },
+      {
+        type: "google_drive";
+        name: "Google Drive";
+        status: "coming_soon";
+        description: "即将支持 Google Drive 集成";
+        actions: [];
+        disabled: true;
+      }
+    ];
+  };
+  
+  setup_wizard: {
+    nextcloud: {
+      steps: [
+        {
+          title: "服务器信息";
+          fields: ["server_url", "username", "password"];
+        },
+        {
+          title: "同步设置";
+          fields: ["sync_folders", "file_types", "sync_frequency"];
+        },
+        {
+          title: "测试连接";
+          action: "validate_and_save";
+        }
+      ];
+    };
+  };
+}
 ```
 
 ### 用户隔离机制
