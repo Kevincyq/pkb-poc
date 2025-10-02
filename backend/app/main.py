@@ -20,15 +20,14 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://pkb.kmchat.cloud",
-        "https://pkb-test.kmchat.cloud",
+        "https://pkb-test.kmchat.cloud", 
         "https://kb.kmchat.cloud",
         "https://nextcloud.kmchat.cloud",
-        "https://pkb-poc.kmchat.cloud",  # 新的自定义域名
-        "https://pkb-frontend.vercel.app",  # 保留 Vercel 域名作为备用
-        "https://test-pkb.kmchat.cloud",  # 预览环境域名
-        "*",  # 临时：允许所有源进行调试
+        "https://pkb-poc.kmchat.cloud",
+        "https://pkb-frontend.vercel.app",
+        "https://test-pkb.kmchat.cloud",
     ],
-    allow_credentials=False,  # 使用 "*" 时必须为 False
+    allow_credentials=True,  # 恢复为True，支持认证
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
