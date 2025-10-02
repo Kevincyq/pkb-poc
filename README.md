@@ -495,12 +495,6 @@ pnpm build
 
 本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
 
-## 🙏 致谢
-
-- [FastAPI](https://fastapi.tiangolo.com/) - 现代化的 Python Web 框架
-- [Nextcloud](https://nextcloud.com/) - 开源文件同步和共享平台
-- [PostgreSQL](https://www.postgresql.org/) - 强大的开源关系数据库
-- [Celery](https://docs.celeryproject.org/) - 分布式任务队列
 
 ## 📞 支持与反馈
 
@@ -509,6 +503,7 @@ pnpm build
 - 创建 [GitHub Issue](https://github.com/Kevincyq/pkb-poc/issues)
 - 查看 [项目文档](https://github.com/Kevincyq/pkb-poc)
 - 在线演示：[PKB Demo](https://pkb-poc.kmchat.cloud)
+- 技术支持：kevincyq@gmail.com
 
 ## 🏆 项目亮点
 
@@ -520,7 +515,3 @@ PKB 是一个**生产就绪**的智能知识库系统，具备以下特色：
 - ⚡ **高性能** - 异步处理架构，支持大规模数据处理
 - 🐳 **易部署** - 容器化设计，一键部署到任何环境
 - 🔧 **可扩展** - 模块化架构，易于定制和扩展
-
----
-
-**PKB** - 下一代智能个人知识库 🚀
