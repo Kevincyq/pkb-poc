@@ -10,6 +10,7 @@ import UploadStatusCard, { type UploadFileStatus } from '../../components/Upload
 import CreateCollectionModal from '../../components/Collection/CreateCollectionModal';
 import type { UploadProps } from 'antd';
 import * as collectionService from '../../services/collectionManageService';
+import { uploadFile, getProcessingStatus } from '../../services/uploadService';
 import api from '../../services/api';
 
 
@@ -233,45 +234,8 @@ export default function Home() {
     setUploadDrawerVisible(true);
     
     try {
-      // 创建FormData
-      const formData = new FormData();
-      formData.append('file', file);
-
-      // 调用新的上传接口，带上传进度
-      const xhr = new XMLHttpRequest();
-      
-      const uploadPromise = new Promise<any>((resolve, reject) => {
-        xhr.upload.addEventListener('progress', (event) => {
-          if (event.lengthComputable) {
-            const uploadProgress = Math.round((event.loaded / event.total) * 100);
-            setUploadFiles(prev => prev.map(f => 
-              f.id === fileId ? { ...f, uploadProgress } : f
-            ));
-          }
-        });
-        
-        xhr.addEventListener('load', () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              const result = JSON.parse(xhr.responseText);
-              resolve(result);
-            } catch (e) {
-              reject(new Error('响应解析失败'));
-            }
-          } else {
-            reject(new Error(`上传失败: ${xhr.statusText}`));
-          }
-        });
-        
-        xhr.addEventListener('error', () => {
-          reject(new Error('网络错误'));
-        });
-        
-        xhr.open('POST', '/api/ingest/upload');
-        xhr.send(formData);
-      });
-
-      const result = await uploadPromise;
+      // 使用统一的上传服务
+      const result = await uploadFile(file);
 
       if (result.status === 'success') {
         // 更新状态为解析中
@@ -307,12 +271,8 @@ export default function Home() {
   const pollProcessingStatus = (contentId: string, fileId: string) => {
     const pollInterval = setInterval(async () => {
       try {
-        const response = await fetch(`/api/ingest/status/${contentId}`);
-        if (!response.ok) {
-          throw new Error('状态查询失败');
-        }
-
-        const statusData = await response.json();
+        // 使用统一的状态查询服务
+        const statusData = await getProcessingStatus(contentId);
         
         // 更新文件状态
         setUploadFiles(prev => prev.map(f => {
