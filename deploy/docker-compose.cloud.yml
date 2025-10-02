@@ -51,6 +51,8 @@ services:
       - VISION_MODEL=${VISION_MODEL:-turing/gpt-4o-mini}
       
       # 数据库配置
+      - DATABASE_URL=postgresql://pkb:${POSTGRES_PASSWORD:-pkb_secure_2024}@postgres/${POSTGRES_DB:-pkb}
+      - DATABASE_URL=postgresql://pkb:${POSTGRES_PASSWORD:-pkb_secure_2024}@postgres/${POSTGRES_DB:-pkb}
       - POSTGRES_URL=postgresql://pkb:${POSTGRES_PASSWORD:-pkb_secure_2024}@postgres/${POSTGRES_DB:-pkb}
       - REDIS_URL=redis://redis:6379/0
       
@@ -94,6 +96,7 @@ services:
       - TURING_API_BASE=${TURING_API_BASE:-https://live-turing.cn.llm.tcljd.com/api/v1}
       - CLASSIFICATION_MODEL=${CLASSIFICATION_MODEL:-turing/gpt-4o-mini}
       - VISION_MODEL=${VISION_MODEL:-turing/gpt-4o-mini}
+      - DATABASE_URL=postgresql://pkb:${POSTGRES_PASSWORD:-pkb_secure_2024}@postgres/${POSTGRES_DB:-pkb}
       - POSTGRES_URL=postgresql://pkb:${POSTGRES_PASSWORD:-pkb_secure_2024}@postgres/${POSTGRES_DB:-pkb}
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
@@ -119,6 +122,7 @@ services:
       - TURING_API_BASE=${TURING_API_BASE:-https://live-turing.cn.llm.tcljd.com/api/v1}
       - CLASSIFICATION_MODEL=${CLASSIFICATION_MODEL:-turing/gpt-4o-mini}
       - VISION_MODEL=${VISION_MODEL:-turing/gpt-4o-mini}
+      - DATABASE_URL=postgresql://pkb:${POSTGRES_PASSWORD:-pkb_secure_2024}@postgres/${POSTGRES_DB:-pkb}
       - POSTGRES_URL=postgresql://pkb:${POSTGRES_PASSWORD:-pkb_secure_2024}@postgres/${POSTGRES_DB:-pkb}
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
@@ -143,6 +147,7 @@ services:
       - TURING_API_KEY=${TURING_API_KEY}
       - TURING_API_BASE=${TURING_API_BASE:-https://live-turing.cn.llm.tcljd.com/api/v1}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      - DATABASE_URL=postgresql://pkb:${POSTGRES_PASSWORD:-pkb_secure_2024}@postgres/${POSTGRES_DB:-pkb}
       - POSTGRES_URL=postgresql://pkb:${POSTGRES_PASSWORD:-pkb_secure_2024}@postgres/${POSTGRES_DB:-pkb}
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/0
