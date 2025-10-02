@@ -101,7 +101,7 @@ docker-compose -p pkb-test down 2>/dev/null || true
 
 # 启动测试环境
 log_info "启动测试环境..."
-docker-compose -p pkb-test up -d --build
+docker-compose -f docker-compose.cloud.yml -p pkb-test up -d --build
 
 # 等待服务启动
 log_info "等待服务启动..."
