@@ -5,6 +5,7 @@
 import os
 import json
 import logging
+from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -171,28 +172,45 @@ class CategoryService:
             if not category:
                 return {"success": False, "error": f"Category not found: {classification_result['category']}"}
             
-            # 删除现有的系统分类（快速分类），保留合集分类
-            existing_system_classifications = self.db.query(ContentCategory).join(
+            # 使用UPSERT逻辑：先查找现有记录，如果存在则更新，否则创建新记录
+            existing_classification = self.db.query(ContentCategory).filter(
+                ContentCategory.content_id == content_uuid,
+                ContentCategory.category_id == category.id
+            ).first()
+            
+            if existing_classification:
+                # 更新现有记录
+                existing_classification.confidence = classification_result["confidence"]
+                existing_classification.reasoning = classification_result.get("reasoning", "")
+                existing_classification.role = "primary_system"  # 系统主分类
+                existing_classification.source = "ml"            # AI机器学习分类
+                existing_classification.created_at = datetime.utcnow()  # 更新时间戳
+                log.info(f"Updated existing classification for content {content_uuid}")
+            else:
+                # 创建新的分类关联
+                content_category = ContentCategory(
+                    content_id=content_uuid,
+                    category_id=category.id,
+                    confidence=classification_result["confidence"],
+                    reasoning=classification_result.get("reasoning", ""),
+                    role="primary_system",  # 系统主分类
+                    source="ml"             # AI机器学习分类
+                )
+                self.db.add(content_category)
+                log.info(f"Created new classification for content {content_uuid}")
+            
+            # 删除其他系统分类（如果AI分类结果与快速分类不同）
+            other_system_classifications = self.db.query(ContentCategory).join(
                 Category, ContentCategory.category_id == Category.id
             ).filter(
                 ContentCategory.content_id == content_uuid,
+                ContentCategory.category_id != category.id,  # 不是当前分类
                 Category.is_system == True  # 只删除系统分类
             ).all()
             
-            for existing in existing_system_classifications:
-                self.db.delete(existing)
-            
-            # 创建新的分类关联
-            content_category = ContentCategory(
-                content_id=content_uuid,
-                category_id=category.id,
-                confidence=classification_result["confidence"],
-                reasoning=classification_result.get("reasoning", ""),
-                role="primary_system",  # 系统主分类
-                source="ml"             # AI机器学习分类
-            )
-            
-            self.db.add(content_category)
+            for other_classification in other_system_classifications:
+                log.info(f"Removing conflicting system classification: {other_classification.category_id}")
+                self.db.delete(other_classification)
             
             # 更新Content的分类状态（AI分类完成，允许前端显示）
             if content.meta is None:

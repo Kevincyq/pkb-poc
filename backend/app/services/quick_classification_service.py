@@ -94,17 +94,31 @@ class QuickClassificationService:
             if not category:
                 return {"success": False, "error": f"Category not found: {classification_result['category']}"}
             
-            # 创建快速分类记录
-            content_category = ContentCategory(
-                content_id=content_uuid,
-                category_id=category.id,
-                confidence=classification_result["confidence"],
-                reasoning=f"快速分类: {classification_result.get('reasoning', '')}",
-                role="primary_system",  # 系统主分类
-                source="heuristic"      # 基于规则的快速分类
-            )
+            # 使用UPSERT逻辑：先查找现有记录，如果存在则更新，否则创建新记录
+            existing_classification = self.db.query(ContentCategory).filter(
+                ContentCategory.content_id == content_uuid,
+                ContentCategory.category_id == category.id
+            ).first()
             
-            self.db.add(content_category)
+            if existing_classification:
+                # 更新现有记录
+                existing_classification.confidence = classification_result["confidence"]
+                existing_classification.reasoning = f"快速分类: {classification_result.get('reasoning', '')}"
+                existing_classification.role = "primary_system"  # 系统主分类
+                existing_classification.source = "heuristic"     # 基于规则的快速分类
+                log.info(f"Updated existing quick classification for content {content_uuid}")
+            else:
+                # 创建快速分类记录
+                content_category = ContentCategory(
+                    content_id=content_uuid,
+                    category_id=category.id,
+                    confidence=classification_result["confidence"],
+                    reasoning=f"快速分类: {classification_result.get('reasoning', '')}",
+                    role="primary_system",  # 系统主分类
+                    source="heuristic"      # 基于规则的快速分类
+                )
+                self.db.add(content_category)
+                log.info(f"Created new quick classification for content {content_uuid}")
             
             # 更新Content的分类状态
             if content.meta is None:
