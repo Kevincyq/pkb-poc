@@ -61,7 +61,11 @@ fi
 echo "🛑 Stopping services..."
 docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME down
 
-# 3. 启动数据库和backend服务用于迁移
+# 3. 重新构建backend镜像（包含新的迁移文件）
+echo "🔨 Rebuilding backend image with migration files..."
+docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME build pkb-backend
+
+# 4. 启动数据库和backend服务用于迁移
 echo "🔧 Starting database and backend for migration..."
 docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME up -d postgres redis
 sleep 10  # 等待数据库启动
@@ -70,13 +74,16 @@ echo "🚀 Starting backend service..."
 docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME up -d pkb-backend
 sleep 5   # 等待backend服务启动
 
-# 4. 检查容器中的文件结构
-echo "🔍 Checking container file structure..."
-docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T pkb-backend ls -la /app/
-echo "🔍 Checking app directory..."
-docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T pkb-backend ls -la /app/app/
+# 5. 验证迁移文件存在
+echo "🔍 Verifying migration files exist..."
+if docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T pkb-backend test -f app/migrate_phase1.py; then
+    echo "✅ Migration file found"
+else
+    echo "❌ Migration file not found in container"
+    exit 1
+fi
 
-# 4. 运行迁移
+# 6. 运行迁移
 echo "🔄 Running Phase 1 migration..."
 docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T pkb-backend python app/migrate_phase1.py --force
 
@@ -96,7 +103,7 @@ else
     exit 1
 fi
 
-# 5. 验证迁移结果
+# 7. 验证迁移结果
 echo "🔍 Verifying migration..."
 docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T pkb-backend python -c "
 from app.db import SessionLocal
@@ -138,18 +145,18 @@ else
     exit 1
 fi
 
-# 6. 重启所有服务
+# 8. 重启所有服务
 echo "🚀 Starting all services..."
 docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME up -d
 
-# 7. 等待服务启动并检查状态
+# 9. 等待服务启动并检查状态
 echo "⏳ Waiting for services to start..."
 sleep 15
 
 echo "🔍 Checking service status..."
 docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME ps
 
-# 8. 测试API
+# 10. 测试API
 echo "🧪 Testing API..."
 sleep 5
 if curl -f http://localhost:8000/health > /dev/null 2>&1; then
