@@ -61,10 +61,14 @@ fi
 echo "🛑 Stopping services..."
 docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME down
 
-# 3. 启动数据库（只启动数据库用于迁移）
-echo "🔧 Starting database for migration..."
-docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME up -d postgres
+# 3. 启动数据库和backend服务用于迁移
+echo "🔧 Starting database and backend for migration..."
+docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME up -d postgres redis
 sleep 10  # 等待数据库启动
+
+echo "🚀 Starting backend service..."
+docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME up -d backend
+sleep 5   # 等待backend服务启动
 
 # 4. 运行迁移
 echo "🔄 Running Phase 1 migration..."
