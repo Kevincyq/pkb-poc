@@ -7,7 +7,7 @@ import tempfile
 import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from app.db import Base, get_db
+from app.db import Base
 from app.models import Content, Category, Collection, ContentCategory
 from datetime import datetime
 import uuid
