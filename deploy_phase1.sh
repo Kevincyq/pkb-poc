@@ -31,9 +31,9 @@ if docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME ps | grep -q "Up"; then
     echo "📦 Creating database backup..."
     BACKUP_FILE="backup_before_phase1_$(date +%Y%m%d_%H%M%S).sql"
     
-    # 云端数据库配置（基于docker-compose.cloud.yml）
+    # 测试环境数据库配置（基于.env文件）
     DB_USER="pkb"
-    DB_NAME="pkb"
+    DB_NAME="pkb_test"
     
     echo "Database config: User=$DB_USER, Database=$DB_NAME"
     echo "Backing up database: $DB_NAME (user: $DB_USER)"
@@ -102,7 +102,7 @@ else
         echo "Restoring from backup..."
         docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME up -d postgres
         sleep 5
-        docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T postgres psql -U "pkb" "pkb" < "$BACKUP_FILE"
+        docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T postgres psql -U "$DB_USER" "$DB_NAME" < "$BACKUP_FILE"
         echo "✅ Database restored from backup"
     else
         echo "⚠️  No backup file found, please restore manually if needed"
