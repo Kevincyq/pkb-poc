@@ -201,6 +201,10 @@ class CategoryService:
             content.meta["classification_status"] = "ai_done"
             content.meta["show_classification"] = True  # AI分类完成后允许显示
             
+            # 标记meta字段为已修改，确保SQLAlchemy保存更改
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(content, 'meta')
+            
             self.db.commit()
             
             logger.info(f"Successfully classified content {content_id} as {category.name}")

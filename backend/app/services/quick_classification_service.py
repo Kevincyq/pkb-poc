@@ -116,6 +116,10 @@ class QuickClassificationService:
             else:
                 content.meta["show_classification"] = False
             
+            # 标记meta字段为已修改，确保SQLAlchemy保存更改
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(content, 'meta')
+            
             self.db.commit()
             
             logger.info(f"Quick classified content {content_id} as {category.name} (display: {update_display})")

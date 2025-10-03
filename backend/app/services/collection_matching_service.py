@@ -183,6 +183,10 @@ class CollectionMatchingService:
             content.meta["classification_status"] = "completed"
             # 保持show_classification状态不变，由AI分类决定
             
+            # 标记meta字段为已修改，确保SQLAlchemy保存更改
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(content, 'meta')
+            
             # 提交所有关联创建和状态更新
             self.db.commit()
             
