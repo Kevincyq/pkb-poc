@@ -9,8 +9,14 @@ console.log('🔍 Environment check:', {
   'window.location': window.location.href
 });
 
-// 优化：使用协议相对 URL，自动适配 http/https
-const baseURL = import.meta.env.VITE_API_BASE_URL || '//pkb.kmchat.cloud/api';
+// API基础URL配置
+// 优先使用环境变量（Vercel会在构建时注入）
+// 本地开发时的fallback逻辑
+const baseURL = import.meta.env.VITE_API_BASE_URL || 
+  (window.location.hostname === 'localhost' 
+    ? 'http://localhost:8003/api'  // 本地开发
+    : 'https://pkb-test.kmchat.cloud/api'  // 默认测试环境
+  );
 console.log('🎯 Selected baseURL:', baseURL);
 
 const api = axios.create({

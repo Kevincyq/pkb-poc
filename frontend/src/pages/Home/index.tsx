@@ -277,13 +277,15 @@ export default function Home() {
         // 更新文件状态
         setUploadFiles(prev => prev.map(f => {
           if (f.id === fileId) {
-            if (statusData.processing_status === 'processing') {
+            // 根据classification_status和show_classification来判断状态
+            if (statusData.classification_status === 'pending' || !statusData.show_classification) {
               return {
                 ...f,
                 status: 'classifying',
-                progress: 70
+                progress: statusData.classification_status === 'quick_done' ? 50 : 
+                         statusData.classification_status === 'ai_done' ? 80 : 30
               };
-            } else if (statusData.processing_status === 'completed') {
+            } else if (statusData.classification_status === 'completed' && statusData.show_classification) {
               const categories = statusData.categories?.map((cat: any) => ({
                 id: cat.id,
                 name: cat.name,
@@ -301,7 +303,7 @@ export default function Home() {
           return f;
         }));
         
-        if (statusData.processing_status === 'completed') {
+        if (statusData.classification_status === 'completed' && statusData.show_classification) {
           clearInterval(pollInterval);
           
           // 刷新页面数据
@@ -320,12 +322,21 @@ export default function Home() {
           } : f
         ));
       }
-    }, 2000); // 每2秒轮询一次
+    }, 1500); // 每1.5秒轮询一次，减少服务器压力
 
-    // 30秒后停止轮询
+    // 20秒后停止轮询（减少无效轮询）
     setTimeout(() => {
       clearInterval(pollInterval);
-    }, 30000);
+      
+      // 如果还没完成，标记为超时
+      setUploadFiles(prev => prev.map(f => 
+        f.id === fileId && f.status === 'classifying' ? { 
+          ...f, 
+          status: 'error', 
+          errorMessage: '分类超时，请刷新页面查看结果' 
+        } : f
+      ));
+    }, 20000);
   };
 
   const uploadProps: UploadProps = {

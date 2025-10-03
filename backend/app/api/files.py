@@ -42,16 +42,33 @@ def get_file_path(filename: str, db: Session) -> Path:
     logger.info(f"Looking for file: {filename}")
     
     try:
+        # URL解码文件名（处理前端传来的编码文件名）
+        import urllib.parse
+        decoded_filename = urllib.parse.unquote(filename)
+        logger.info(f"Decoded filename: {decoded_filename}")
+        
         # 1. 优先通过数据库查找（支持原始文件名和存储文件名）
         # 先尝试通过source_uri查找（存储文件名）
         content = db.query(Content).filter(
             Content.source_uri == f"webui://{filename}"
         ).first()
         
+        # 如果没找到，尝试解码后的文件名
+        if not content:
+            content = db.query(Content).filter(
+                Content.source_uri == f"webui://{decoded_filename}"
+            ).first()
+        
         # 如果没找到，尝试通过原始文件名查找
         if not content:
             content = db.query(Content).filter(
                 Content.title == filename
+            ).first()
+            
+        # 如果没找到，尝试解码后的原始文件名
+        if not content:
+            content = db.query(Content).filter(
+                Content.title == decoded_filename
             ).first()
         
         if content and content.meta and isinstance(content.meta, dict):
@@ -72,6 +89,15 @@ def get_file_path(filename: str, db: Session) -> Path:
                 stored_path = Path("/app/uploads") / stored_filename
                 if stored_path.exists():
                     logger.info(f"Found file via stored filename: {filename} -> {stored_path}")
+                    return stored_path
+            
+            # 如果前端传来的是原始文件名，但数据库中存储的是带时间戳的文件名
+            # 尝试通过source_uri获取实际的存储文件名
+            if content.source_uri and content.source_uri.startswith('webui://'):
+                actual_stored_filename = content.source_uri.replace('webui://', '')
+                stored_path = Path("/app/uploads") / actual_stored_filename
+                if stored_path.exists():
+                    logger.info(f"Found file via source_uri: {filename} -> {stored_path}")
                     return stored_path
         else:
             logger.info(f"No database record found for: {filename}")

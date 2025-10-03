@@ -105,10 +105,19 @@ export default function DocumentCard({
     // 重新启用真实缩略图功能
     console.log(`🔍 Getting thumbnail URL for: ${sourceUri}`);
     
+    // 确定API基础URL（与api.ts保持一致）
+    // 优先使用环境变量，与api.ts的逻辑保持一致
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 
+      (window.location.hostname === 'localhost' 
+        ? 'http://localhost:8003/api' 
+        : 'https://pkb-test.kmchat.cloud/api'
+      );
+    
     // 如果是webui上传的图片，尝试使用后端缩略图
     if (sourceUri.includes('webui://')) {
       const fileName = sourceUri.replace('webui://', '');
-      const thumbnailUrl = `//pkb.kmchat.cloud/api/files/thumbnail/${encodeURIComponent(fileName)}`;
+      // 使用实际存储的文件名（从source_uri获取），进行URL编码以处理中文字符
+      const thumbnailUrl = `${apiBaseUrl}/files/thumbnail/${encodeURIComponent(fileName)}`;
       console.log(`📸 WebUI thumbnail URL: ${thumbnailUrl}`);
       return thumbnailUrl;
     }
@@ -116,7 +125,7 @@ export default function DocumentCard({
     // 如果是nextcloud的图片，也可以尝试生成缩略图
     if (sourceUri.includes('nextcloud://')) {
       const fileName = sourceUri.replace('nextcloud://', '');
-      const thumbnailUrl = `//pkb.kmchat.cloud/api/files/thumbnail/${encodeURIComponent(fileName)}`;
+      const thumbnailUrl = `${apiBaseUrl}/files/thumbnail/${fileName}`;
       console.log(`☁️ Nextcloud thumbnail URL: ${thumbnailUrl}`);
       return thumbnailUrl;
     }
