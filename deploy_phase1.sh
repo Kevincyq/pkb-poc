@@ -70,6 +70,12 @@ echo "🚀 Starting backend service..."
 docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME up -d pkb-backend
 sleep 5   # 等待backend服务启动
 
+# 4. 检查容器中的文件结构
+echo "🔍 Checking container file structure..."
+docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T pkb-backend ls -la /app/
+echo "🔍 Checking app directory..."
+docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T pkb-backend ls -la /app/app/
+
 # 4. 运行迁移
 echo "🔄 Running Phase 1 migration..."
 docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T pkb-backend python app/migrate_phase1.py --force
