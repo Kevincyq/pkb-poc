@@ -73,9 +73,27 @@ class QuickClassificationService:
             ).first()
             
             if existing_classification:
+                # 即使已有分类，也要更新meta字段状态
+                if content.meta is None:
+                    content.meta = {}
+                
+                content.meta["classification_status"] = "quick_done"
+                if update_display:
+                    content.meta["show_classification"] = True
+                else:
+                    content.meta["show_classification"] = False
+                
+                # 标记meta字段为已修改，确保SQLAlchemy保存更改
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(content, 'meta')
+                
+                self.db.commit()
+                
+                logger.info(f"Updated meta for existing classification: content {content_id} (display: {update_display})")
+                
                 return {
                     "success": True,
-                    "message": "Content already has system classification",
+                    "message": "Content already has system classification, meta updated",
                     "category_id": str(existing_classification.category_id),
                     "is_quick": False
                 }
@@ -106,7 +124,7 @@ class QuickClassificationService:
                 existing_classification.reasoning = f"快速分类: {classification_result.get('reasoning', '')}"
                 existing_classification.role = "primary_system"  # 系统主分类
                 existing_classification.source = "heuristic"     # 基于规则的快速分类
-                log.info(f"Updated existing quick classification for content {content_uuid}")
+                logger.info(f"Updated existing quick classification for content {content_uuid}")
             else:
                 # 创建快速分类记录
                 content_category = ContentCategory(
@@ -118,7 +136,7 @@ class QuickClassificationService:
                     source="heuristic"      # 基于规则的快速分类
                 )
                 self.db.add(content_category)
-                log.info(f"Created new quick classification for content {content_uuid}")
+                logger.info(f"Created new quick classification for content {content_uuid}")
             
             # 更新Content的分类状态
             if content.meta is None:

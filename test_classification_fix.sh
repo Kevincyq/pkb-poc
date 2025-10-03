@@ -3,7 +3,7 @@
 echo "🔧 Testing Classification Fix"
 echo "============================"
 
-cd /home/kevincyq/pkb-poc/deploy
+cd /home/ec2-user/pkb-poc/deploy
 
 echo "🛑 Stopping services..."
 docker-compose -f docker-compose.cloud.yml -p pkb-test down

@@ -185,7 +185,7 @@ class CategoryService:
                 existing_classification.role = "primary_system"  # 系统主分类
                 existing_classification.source = "ml"            # AI机器学习分类
                 existing_classification.created_at = datetime.utcnow()  # 更新时间戳
-                log.info(f"Updated existing classification for content {content_uuid}")
+                logger.info(f"Updated existing classification for content {content_uuid}")
             else:
                 # 创建新的分类关联
                 content_category = ContentCategory(
@@ -197,7 +197,7 @@ class CategoryService:
                     source="ml"             # AI机器学习分类
                 )
                 self.db.add(content_category)
-                log.info(f"Created new classification for content {content_uuid}")
+                logger.info(f"Created new classification for content {content_uuid}")
             
             # 删除其他系统分类（如果AI分类结果与快速分类不同）
             other_system_classifications = self.db.query(ContentCategory).join(
@@ -209,7 +209,7 @@ class CategoryService:
             ).all()
             
             for other_classification in other_system_classifications:
-                log.info(f"Removing conflicting system classification: {other_classification.category_id}")
+                logger.info(f"Removing conflicting system classification: {other_classification.category_id}")
                 self.db.delete(other_classification)
             
             # 更新Content的分类状态（AI分类完成，允许前端显示）
