@@ -390,7 +390,7 @@ async def _process_single_file(file: UploadFile, db: Session):
         # 2.5. 如果是图片文件，立即预生成缩略图
         try:
             from app.api.files import pregenerate_thumbnail_if_image
-            if pregenerate_thumbnail_if_image(temp_file_path):
+            if pregenerate_thumbnail_if_image(Path(temp_file_path)):
                 log.info(f"Pre-generated thumbnail for uploaded image: {actual_filename}")
         except Exception as e:
             log.warning(f"Failed to pre-generate thumbnail for {actual_filename}: {e}")

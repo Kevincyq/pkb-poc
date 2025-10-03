@@ -154,7 +154,7 @@ class Tag(Base):
     
     # 关系
     parent = relationship("Tag", remote_side=[id])
-    children = relationship("Tag")
+    children = relationship("Tag", overlaps="parent")
     content_tags = relationship("ContentTag", back_populates="tag", cascade="all, delete-orphan")
 
 class ContentTag(Base):
@@ -167,7 +167,7 @@ class ContentTag(Base):
     created_at = Column(TIMESTAMP, server_default="now()")
     
     # 关系
-    content = relationship("Content")
+    content = relationship("Content", overlaps="content_tags")
     tag = relationship("Tag", back_populates="content_tags")
 
 class Signals(Base):
@@ -182,7 +182,7 @@ class Signals(Base):
     created_at = Column(TIMESTAMP, server_default="now()")
     
     # 关系
-    content = relationship("Content")
+    content = relationship("Content", overlaps="signals")
 
 class OpsLog(Base):
     __tablename__ = "ops_log"
