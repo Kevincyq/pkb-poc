@@ -457,7 +457,7 @@ async def _process_single_file(file: UploadFile, db: Session):
                 priority=8
             )
         
-        # 方案A：并行执行，6秒内完成所有分类任务
+        # 方案A：优化时序，确保合集匹配基于AI分类结果
         
         # 快速分类（1秒后执行，后台执行不显示给用户）
         from app.workers.quick_tasks import quick_classify_content
@@ -468,21 +468,21 @@ async def _process_single_file(file: UploadFile, db: Session):
             countdown=1   # 1秒后执行
         )
         
-        # AI精确分类（2秒后执行，与快速分类并行）
+        # AI精确分类（1.5秒后执行，给快速分类留出时间）
         classify_content.apply_async(
             args=[str(content_record.id)],
             queue="classify",
             priority=9,   # 高优先级
-            countdown=2   # 2秒后执行，与快速分类并行
+            countdown=1.5   # 1.5秒后执行
         )
         
-        # 智能合集匹配（5秒后执行，基于AI分类结果）
+        # 智能合集匹配（6秒后执行，确保AI分类完成后再执行）
         from app.workers.quick_tasks import match_document_to_collections
         match_document_to_collections.apply_async(
             args=[str(content_record.id)],
             queue="quick",
             priority=8,   # 次高优先级
-            countdown=5   # 5秒后执行，基于AI分类结果
+            countdown=6   # 6秒后执行，确保AI分类完成（1.5s启动 + 3s执行 + 0.5s缓冲）
         )
         
         # 7. 保留文件（持久化存储，不删除）
@@ -538,17 +538,35 @@ def get_processing_status(content_id: str, db: Session = Depends(get_db)):
         
         # 只有在允许显示分类时才返回分类信息
         if show_classification and categories:
-            result["categories"] = [
-                {
+            # 分离主分类和次要分类
+            primary_categories = []
+            secondary_categories = []
+            
+            for cat in categories:
+                category_info = {
                     "id": str(cat.category_id),
                     "name": cat.category.name if cat.category else "Unknown",
                     "confidence": cat.confidence,
-                    "reasoning": cat.reasoning
+                    "reasoning": cat.reasoning,
+                    "role": cat.role,
+                    "source": cat.source
                 }
-                for cat in categories
-            ]
+                
+                if cat.role == "primary_system":
+                    primary_categories.append(category_info)
+                elif cat.role == "secondary_system":
+                    secondary_categories.append(category_info)
+                else:
+                    # 其他角色（如用户规则）也包含在内
+                    primary_categories.append(category_info)
+            
+            result["categories"] = primary_categories + secondary_categories
+            result["primary_categories"] = primary_categories
+            result["secondary_categories"] = secondary_categories
         else:
             result["categories"] = []
+            result["primary_categories"] = []
+            result["secondary_categories"] = []
             result["message"] = "分类中..." if classification_status == "pending" else "分类处理中"
         
         return result

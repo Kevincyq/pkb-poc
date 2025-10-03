@@ -64,14 +64,23 @@ class CollectionMatchingService:
         """从合集名称中提取关键词"""
         keywords = []
         
-        # 预定义的关键词映射
+        # 预定义的关键词映射（作为种子词汇，可扩展）
         keyword_mapping = {
-            "会议纪要": ["会议", "纪要", "meeting", "minutes", "议题", "决议", "参会"],
+            "会议纪要": ["会议", "纪要", "meeting", "minutes", "议题", "决议", "参会", "讨论", "会谈"],
+            "旅游": ["旅游", "旅行", "度假", "vacation", "travel", "景点", "风景", "海边", "山水", "迪斯尼", "景区", "酒店", "套餐"],
             "项目文档": ["项目", "project", "计划", "方案", "需求", "设计"],
             "技术文档": ["技术", "开发", "代码", "API", "架构", "设计"],
             "工作总结": ["总结", "汇报", "报告", "review", "summary"],
             "学习笔记": ["学习", "笔记", "note", "教程", "课程", "培训"],
-            "重要文档": ["重要", "关键", "核心", "urgent", "important"]
+            "重要文档": ["重要", "关键", "核心", "urgent", "important"],
+            "生活记录": ["生活", "日常", "个人", "家庭", "朋友", "休闲", "娱乐"],
+            "美食": ["美食", "餐厅", "菜谱", "cooking", "food", "吃饭", "料理"],
+            "健康": ["健康", "医疗", "运动", "fitness", "health", "锻炼", "体检", "养生"],
+            "财务": ["财务", "理财", "投资", "finance", "money", "预算", "账单", "收支"],
+            "家庭": ["家庭", "family", "孩子", "父母", "亲子", "育儿", "家务"],
+            "娱乐": ["娱乐", "游戏", "电影", "音乐", "entertainment", "movie", "game", "music"],
+            "购物": ["购物", "shopping", "商品", "价格", "优惠", "折扣", "商城"],
+            "教育": ["教育", "education", "培训", "课程", "学校", "老师", "学生"]
         }
         
         # 直接匹配
@@ -83,10 +92,48 @@ class CollectionMatchingService:
             if key in name or name in key:
                 keywords.extend(values)
         
+        # 智能关键词扩展：基于合集名称的语义分析
+        keywords.extend(self._generate_semantic_keywords(name))
+        
         # 添加原始名称作为关键词
         keywords.append(name)
         
-        return keywords
+        return list(set(keywords))  # 去重
+    
+    def _generate_semantic_keywords(self, name: str) -> List[str]:
+        """基于合集名称生成语义相关的关键词"""
+        semantic_keywords = []
+        
+        # 分词处理（简单的中文分词逻辑）
+        import re
+        # 提取中文词汇
+        chinese_words = re.findall(r'[\u4e00-\u9fff]+', name)
+        for word in chinese_words:
+            if len(word) >= 2:  # 只保留长度>=2的词
+                semantic_keywords.append(word)
+        
+        # 提取英文词汇
+        english_words = re.findall(r'[a-zA-Z]+', name)
+        for word in english_words:
+            if len(word) >= 3:  # 只保留长度>=3的英文词
+                semantic_keywords.append(word.lower())
+        
+        # 基于常见词汇模式扩展
+        name_lower = name.lower()
+        
+        # 如果包含时间相关词汇
+        if any(time_word in name_lower for time_word in ['日记', '记录', '日志', 'diary', 'log']):
+            semantic_keywords.extend(['记录', '日志', '笔记'])
+        
+        # 如果包含工作相关词汇
+        if any(work_word in name_lower for work_word in ['工作', 'work', '职场', '公司']):
+            semantic_keywords.extend(['工作', '职场', '办公'])
+        
+        # 如果包含学习相关词汇
+        if any(study_word in name_lower for study_word in ['学习', 'study', '课程', '教程']):
+            semantic_keywords.extend(['学习', '教育', '知识'])
+        
+        return semantic_keywords
     
     def _extract_keywords_from_description(self, description: str) -> List[str]:
         """从描述中提取关键词"""
@@ -157,6 +204,11 @@ class CollectionMatchingService:
                 logger.warning(f"Content not found: {content_id}")
                 return []
             
+            # 检查内容是否有足够的信息进行匹配
+            if not content.title and not content.text:
+                logger.info(f"Content {content_id} has no title or text, skipping collection matching")
+                return []
+            
             # 获取所有用户创建的合集（包括没有匹配规则的）
             collections = self.db.query(Collection).filter(
                 Collection.auto_generated == False  # 用户创建的合集
@@ -223,14 +275,18 @@ class CollectionMatchingService:
             
             # 标题匹配
             title_score = self._calculate_title_match_score(content.title, rules)
-            match_score += title_score * 0.4  # 标题权重40%
+            match_score += title_score * 0.3  # 标题权重30%
             
             # 内容匹配
             content_score = self._calculate_content_match_score(content.text, rules)
-            match_score += content_score * 0.6  # 内容权重60%
+            match_score += content_score * 0.4  # 内容权重40%
+            
+            # 图片活动推理匹配（新增）
+            activity_score = self._calculate_activity_match_score(content, rules)
+            match_score += activity_score * 0.3  # 活动推理权重30%
             
             logger.info(f"Match score for '{content.title}' -> '{collection.name}': "
-                       f"title={title_score:.2f}, content={content_score:.2f}, "
+                       f"title={title_score:.2f}, content={content_score:.2f}, activity={activity_score:.2f}, "
                        f"total={match_score:.2f}, threshold={threshold:.2f}, "
                        f"match={match_score >= threshold}")
             
@@ -366,3 +422,104 @@ class CollectionMatchingService:
         except Exception as e:
             logger.error(f"Error creating content-collection association: {e}")
             self.db.rollback()
+    
+    def _calculate_activity_match_score(self, content: Content, rules: Dict) -> float:
+        """基于图片活动推理计算匹配分数"""
+        try:
+            # 如果不是图片或没有文本内容，返回0
+            if content.modality != 'image' or not content.text:
+                return 0.0
+            
+            # 解析图片分析结果
+            activity_info = self._parse_image_analysis(content.text)
+            if not activity_info:
+                return 0.0
+            
+            # 获取合集关键词
+            keywords = rules.get("keywords", [])
+            if not keywords:
+                return 0.0
+            
+            score = 0.0
+            total_checks = 0
+            
+            # 检查活动推理匹配
+            activity_inference = activity_info.get("activity_inference", "").lower()
+            if activity_inference:
+                total_checks += 1
+                for keyword in keywords:
+                    if keyword.lower() in activity_inference:
+                        score += 0.8  # 活动推理匹配权重高
+                        logger.debug(f"Activity inference match: '{keyword}' in '{activity_inference}'")
+                        break
+            
+            # 检查关键元素匹配
+            key_elements = activity_info.get("key_elements", "").lower()
+            if key_elements:
+                total_checks += 1
+                keyword_matches = 0
+                for keyword in keywords:
+                    if keyword.lower() in key_elements:
+                        keyword_matches += 1
+                        logger.debug(f"Key element match: '{keyword}' in '{key_elements}'")
+                
+                if keyword_matches > 0:
+                    score += (keyword_matches / len(keywords)) * 0.6  # 关键元素匹配
+            
+            # 检查场景描述匹配
+            scene_description = activity_info.get("scene_description", "").lower()
+            if scene_description:
+                total_checks += 1
+                for keyword in keywords:
+                    if keyword.lower() in scene_description:
+                        score += 0.4  # 场景描述匹配权重较低
+                        logger.debug(f"Scene description match: '{keyword}' in '{scene_description}'")
+                        break
+            
+            # 归一化分数
+            final_score = min(score, 1.0) if total_checks > 0 else 0.0
+            
+            logger.debug(f"Activity match score: {final_score:.2f} for content '{content.title}'")
+            return final_score
+            
+        except Exception as e:
+            logger.error(f"Error calculating activity match score: {e}")
+            return 0.0
+    
+    def _parse_image_analysis(self, text: str) -> Dict[str, str]:
+        """解析图片分析结果，提取结构化信息"""
+        try:
+            if not text:
+                return {}
+            
+            result = {}
+            
+            # 使用正则表达式提取各个部分
+            import re
+            
+            # 提取活动推理
+            activity_match = re.search(r'【活动推理】\s*(.*?)(?=【|$)', text, re.DOTALL)
+            if activity_match:
+                result["activity_inference"] = activity_match.group(1).strip()
+            
+            # 提取关键元素
+            elements_match = re.search(r'【关键元素】\s*(.*?)(?=【|$)', text, re.DOTALL)
+            if elements_match:
+                result["key_elements"] = elements_match.group(1).strip()
+            
+            # 提取场景描述
+            scene_match = re.search(r'【场景描述】\s*(.*?)(?=【|$)', text, re.DOTALL)
+            if scene_match:
+                result["scene_description"] = scene_match.group(1).strip()
+            
+            # 提取分类建议
+            classification_match = re.search(r'【分类建议】\s*(.*?)(?=【|$)', text, re.DOTALL)
+            if classification_match:
+                result["classification_suggestion"] = classification_match.group(1).strip()
+            
+            logger.debug(f"Parsed image analysis: {result}")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error parsing image analysis: {e}")
+            return {}

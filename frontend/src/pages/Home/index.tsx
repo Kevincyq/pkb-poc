@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Row, Col, Button, message, Upload, Modal, Input, Drawer } from 'antd';
-import { SearchOutlined, PlusOutlined, FileTextOutlined } from '@ant-design/icons';
+import { Row, Col, Button, message, Upload, Modal, Input, Drawer, Select, Slider, Tag } from 'antd';
+import { SearchOutlined, PlusOutlined, FileTextOutlined, FilterOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import MainLayout from '../../components/Layout/MainLayout';
@@ -38,6 +38,20 @@ export default function Home() {
   const [uploadDrawerVisible, setUploadDrawerVisible] = useState(false);
   const [createCollectionModalVisible, setCreateCollectionModalVisible] = useState(false);
   const [processingBatch, setProcessingBatch] = useState<string | null>(null); // 防止重复批量上传
+  
+  // 搜索相关状态
+  const [searchModalVisible, setSearchModalVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchFilters, setSearchFilters] = useState({
+    categories: [] as string[],
+    collections: [] as string[],
+    modality: undefined as string | undefined,
+    role: undefined as string | undefined,
+    source: undefined as string | undefined,
+    confidence: [0, 1] as [number, number]
+  });
 
   useEffect(() => {
     loadData();
@@ -95,7 +109,95 @@ export default function Home() {
   const loadCategories = loadData;
 
   const handleSearch = () => {
-    console.log('Search clicked');
+    setSearchModalVisible(true);
+  };
+
+  const performSearch = async () => {
+    const trimmedQuery = searchQuery.trim();
+    if (!trimmedQuery) {
+      message.warning('请输入搜索关键词');
+      return;
+    }
+
+    // 验证搜索查询长度
+    if (trimmedQuery.length > 200) {
+      message.warning('搜索关键词过长，请缩短后重试');
+      return;
+    }
+
+    setSearchLoading(true);
+    try {
+      // 构建搜索参数
+      const params = new URLSearchParams();
+      params.append('q', trimmedQuery);
+      params.append('top_k', '20');
+      params.append('search_type', 'hybrid');
+
+      // 添加过滤条件
+      if (searchFilters.categories.length > 0) {
+        params.append('categories', searchFilters.categories.join(','));
+      }
+      if (searchFilters.collections.length > 0) {
+        params.append('collections', searchFilters.collections.join(','));
+      }
+      if (searchFilters.modality) {
+        params.append('modality', searchFilters.modality);
+      }
+      if (searchFilters.role) {
+        params.append('role', searchFilters.role);
+      }
+      if (searchFilters.source) {
+        params.append('source', searchFilters.source);
+      }
+      if (searchFilters.confidence[0] > 0) {
+        params.append('confidence_min', searchFilters.confidence[0].toString());
+      }
+      if (searchFilters.confidence[1] < 1) {
+        params.append('confidence_max', searchFilters.confidence[1].toString());
+      }
+
+      const response = await api.get(`/search?${params.toString()}`);
+      
+      // 验证响应数据
+      if (!response.data) {
+        throw new Error('搜索响应数据为空');
+      }
+      
+      const results = response.data.results || [];
+      setSearchResults(results);
+      
+      if (results.length === 0) {
+        message.info('没有找到相关内容，请尝试使用不同的关键词或调整过滤条件');
+      } else {
+        console.log(`🔍 Search completed: found ${results.length} results`);
+      }
+    } catch (error: any) {
+      console.error('Search error:', error);
+      
+      // 更详细的错误处理
+      if (error.response?.status === 400) {
+        message.error('搜索参数有误，请检查输入');
+      } else if (error.response?.status === 500) {
+        message.error('服务器错误，请稍后重试');
+      } else if (error.code === 'NETWORK_ERROR') {
+        message.error('网络连接失败，请检查网络');
+      } else {
+        message.error('搜索失败，请重试');
+      }
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const resetSearchFilters = () => {
+    setSearchFilters({
+      categories: [],
+      collections: [],
+      modality: undefined,
+      role: undefined,
+      source: undefined,
+      confidence: [0, 1]
+    });
   };
 
   const handleCreateCollection = () => {
@@ -289,7 +391,13 @@ export default function Home() {
               const categories = statusData.categories?.map((cat: any) => ({
                 id: cat.id,
                 name: cat.name,
-                confidence: cat.confidence || 0.8
+                confidence: cat.confidence || 0.8,
+                role: cat.role || 'primary_system',
+                source: cat.source || 'ml',
+                color: cat.role === 'primary_system' ? 'blue' : 
+                       cat.role === 'secondary_system' ? 'cyan' : 
+                       cat.role === 'user_rule' ? 'green' : 'default',
+                is_system: cat.source === 'ml' || cat.source === 'heuristic'
               })) || [];
               
               console.log(`✅ File ${fileId} classification completed with categories:`, categories);
@@ -650,6 +758,174 @@ export default function Home() {
           </div>
         )}
       </Drawer>
+
+      {/* 搜索模态框 */}
+      <Modal
+        title="智能搜索"
+        open={searchModalVisible}
+        onCancel={() => setSearchModalVisible(false)}
+        width={800}
+        footer={[
+          <Button key="reset" onClick={resetSearchFilters}>
+            重置过滤器
+          </Button>,
+          <Button key="cancel" onClick={() => setSearchModalVisible(false)}>
+            取消
+          </Button>,
+          <Button key="search" type="primary" loading={searchLoading} onClick={performSearch}>
+            搜索
+          </Button>
+        ]}
+      >
+        <div style={{ marginBottom: '16px' }}>
+          <Input.Search
+            placeholder="输入搜索关键词..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onSearch={performSearch}
+            enterButton="搜索"
+            size="large"
+          />
+        </div>
+
+        {/* 过滤器 */}
+        <div style={{ marginBottom: '16px', padding: '16px', background: '#f5f5f5', borderRadius: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
+            <FilterOutlined style={{ marginRight: '8px' }} />
+            <span style={{ fontWeight: 'bold' }}>搜索过滤器</span>
+          </div>
+          
+          <Row gutter={[16, 16]}>
+            <Col span={12}>
+              <div style={{ marginBottom: '8px' }}>分类筛选：</div>
+              <Select
+                mode="multiple"
+                placeholder="选择分类"
+                style={{ width: '100%' }}
+                value={searchFilters.categories}
+                onChange={(value) => setSearchFilters(prev => ({ ...prev, categories: value }))}
+                options={categories.map(cat => ({ label: cat.name, value: cat.name }))}
+              />
+            </Col>
+            <Col span={12}>
+              <div style={{ marginBottom: '8px' }}>合集筛选：</div>
+              <Select
+                mode="multiple"
+                placeholder="选择合集"
+                style={{ width: '100%' }}
+                value={searchFilters.collections}
+                onChange={(value) => setSearchFilters(prev => ({ ...prev, collections: value }))}
+                options={customCollections.map(col => ({ label: col.name, value: col.name }))}
+              />
+            </Col>
+            <Col span={8}>
+              <div style={{ marginBottom: '8px' }}>文件类型：</div>
+              <Select
+                placeholder="选择类型"
+                style={{ width: '100%' }}
+                value={searchFilters.modality}
+                onChange={(value) => setSearchFilters(prev => ({ ...prev, modality: value }))}
+                allowClear
+                options={[
+                  { label: '文本', value: 'text' },
+                  { label: '图片', value: 'image' },
+                  { label: 'PDF', value: 'pdf' }
+                ]}
+              />
+            </Col>
+            <Col span={8}>
+              <div style={{ marginBottom: '8px' }}>分类角色：</div>
+              <Select
+                placeholder="选择角色"
+                style={{ width: '100%' }}
+                value={searchFilters.role}
+                onChange={(value) => setSearchFilters(prev => ({ ...prev, role: value }))}
+                allowClear
+                options={[
+                  { label: '主分类', value: 'primary_system' },
+                  { label: '次分类', value: 'secondary_system' },
+                  { label: '用户规则', value: 'user_rule' }
+                ]}
+              />
+            </Col>
+            <Col span={8}>
+              <div style={{ marginBottom: '8px' }}>分类来源：</div>
+              <Select
+                placeholder="选择来源"
+                style={{ width: '100%' }}
+                value={searchFilters.source}
+                onChange={(value) => setSearchFilters(prev => ({ ...prev, source: value }))}
+                allowClear
+                options={[
+                  { label: 'AI分类', value: 'ml' },
+                  { label: '规则分类', value: 'heuristic' },
+                  { label: '用户规则', value: 'rule' }
+                ]}
+              />
+            </Col>
+            <Col span={24}>
+              <div style={{ marginBottom: '8px' }}>置信度范围：</div>
+              <Slider
+                range
+                min={0}
+                max={1}
+                step={0.1}
+                value={searchFilters.confidence}
+                onChange={(value) => setSearchFilters(prev => ({ ...prev, confidence: value as [number, number] }))}
+                marks={{
+                  0: '0%',
+                  0.5: '50%',
+                  1: '100%'
+                }}
+              />
+            </Col>
+          </Row>
+        </div>
+
+        {/* 搜索结果 */}
+        {searchResults.length > 0 && (
+          <div>
+            <div style={{ marginBottom: '12px', fontWeight: 'bold' }}>
+              搜索结果 ({searchResults.length} 条)
+            </div>
+            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+              {searchResults.map((result, index) => (
+                <div
+                  key={index}
+                  style={{
+                    padding: '12px',
+                    border: '1px solid #e8e8e8',
+                    borderRadius: '8px',
+                    marginBottom: '8px',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => {
+                    // 跳转到文档详情或所属合集
+                    if (result.category_name) {
+                      navigate(`/collection/${encodeURIComponent(result.category_name)}`);
+                      setSearchModalVisible(false);
+                    }
+                  }}
+                >
+                  <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                    {result.title}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>
+                    {result.text?.substring(0, 150)}...
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    {result.category_name && (
+                      <Tag color="blue">📁 {result.category_name}</Tag>
+                    )}
+                    <Tag color="green">📊 {Math.round((result.score || 0) * 100)}%</Tag>
+                    <Tag color="orange">📅 {result.created_at?.split('T')[0]}</Tag>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* 创建合集模态框 */}
       <CreateCollectionModal

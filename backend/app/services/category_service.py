@@ -158,59 +158,71 @@ class CategoryService:
                         "category_id": str(existing_classification.category_id)
                     }
             
-            # 使用AI进行分类
+            # 使用AI进行多标签分类
             classification_result = self._classify_with_ai(content.text, content.title)
             
             if not classification_result["success"]:
                 return classification_result
             
-            # 获取分类
-            category = self.db.query(Category).filter(
-                Category.name == classification_result["category"]
-            ).first()
-            
-            if not category:
-                return {"success": False, "error": f"Category not found: {classification_result['category']}"}
-            
-            # 使用UPSERT逻辑：先查找现有记录，如果存在则更新，否则创建新记录
-            existing_classification = self.db.query(ContentCategory).filter(
-                ContentCategory.content_id == content_uuid,
-                ContentCategory.category_id == category.id
-            ).first()
-            
-            if existing_classification:
-                # 更新现有记录
-                existing_classification.confidence = classification_result["confidence"]
-                existing_classification.reasoning = classification_result.get("reasoning", "")
-                existing_classification.role = "primary_system"  # 系统主分类
-                existing_classification.source = "ml"            # AI机器学习分类
-                existing_classification.created_at = datetime.utcnow()  # 更新时间戳
-                logger.info(f"Updated existing classification for content {content_uuid}")
-            else:
-                # 创建新的分类关联
-                content_category = ContentCategory(
-                    content_id=content_uuid,
-                    category_id=category.id,
-                    confidence=classification_result["confidence"],
-                    reasoning=classification_result.get("reasoning", ""),
-                    role="primary_system",  # 系统主分类
-                    source="ml"             # AI机器学习分类
-                )
-                self.db.add(content_category)
-                logger.info(f"Created new classification for content {content_uuid}")
-            
-            # 删除其他系统分类（如果AI分类结果与快速分类不同）
-            other_system_classifications = self.db.query(ContentCategory).join(
+            # 删除所有现有的系统分类（为多标签分类让路）
+            existing_system_classifications = self.db.query(ContentCategory).join(
                 Category, ContentCategory.category_id == Category.id
             ).filter(
                 ContentCategory.content_id == content_uuid,
-                ContentCategory.category_id != category.id,  # 不是当前分类
                 Category.is_system == True  # 只删除系统分类
             ).all()
             
-            for other_classification in other_system_classifications:
-                logger.info(f"Removing conflicting system classification: {other_classification.category_id}")
-                self.db.delete(other_classification)
+            for existing in existing_system_classifications:
+                logger.info(f"Removing existing system classification: {existing.category_id}")
+                self.db.delete(existing)
+            
+            # 处理主分类
+            primary_category = self.db.query(Category).filter(
+                Category.name == classification_result["primary"]
+            ).first()
+            
+            if not primary_category:
+                return {"success": False, "error": f"Primary category not found: {classification_result['primary']}"}
+            
+            # 创建主分类记录
+            primary_confidence = classification_result["confidence"].get(classification_result["primary"], 0.8)
+            primary_content_category = ContentCategory(
+                content_id=content_uuid,
+                category_id=primary_category.id,
+                confidence=primary_confidence,
+                reasoning=f"AI主分类: {classification_result.get('reasoning', '')}",
+                role="primary_system",
+                source="ml"
+            )
+            self.db.add(primary_content_category)
+            logger.info(f"Created primary classification: {classification_result['primary']} (confidence: {primary_confidence})")
+            
+            # 处理次要分类
+            created_categories = [classification_result["primary"]]
+            for secondary_cat_name in classification_result.get("secondary", []):
+                secondary_category = self.db.query(Category).filter(
+                    Category.name == secondary_cat_name
+                ).first()
+                
+                if secondary_category:
+                    secondary_confidence = classification_result["confidence"].get(secondary_cat_name, 0.5)
+                    # 只有置信度足够高才创建次要分类
+                    if secondary_confidence >= 0.3:
+                        secondary_content_category = ContentCategory(
+                            content_id=content_uuid,
+                            category_id=secondary_category.id,
+                            confidence=secondary_confidence,
+                            reasoning=f"AI次要分类: {classification_result.get('reasoning', '')}",
+                            role="secondary_system",
+                            source="ml"
+                        )
+                        self.db.add(secondary_content_category)
+                        created_categories.append(secondary_cat_name)
+                        logger.info(f"Created secondary classification: {secondary_cat_name} (confidence: {secondary_confidence})")
+                    else:
+                        logger.info(f"Skipped secondary classification {secondary_cat_name} due to low confidence: {secondary_confidence}")
+                else:
+                    logger.warning(f"Secondary category not found: {secondary_cat_name}")
             
             # 更新Content的分类状态（AI分类完成，允许前端显示）
             if content.meta is None:
@@ -225,13 +237,14 @@ class CategoryService:
             
             self.db.commit()
             
-            logger.info(f"Successfully classified content {content_id} as {category.name}")
+            logger.info(f"Successfully classified content {content_id} with {len(created_categories)} categories: {created_categories}")
             
             return {
                 "success": True,
                 "content_id": content_id,
-                "category_id": str(category.id),
-                "category_name": category.name,
+                "primary_category": classification_result["primary"],
+                "secondary_categories": classification_result.get("secondary", []),
+                "all_categories": created_categories,
                 "confidence": classification_result["confidence"],
                 "reasoning": classification_result.get("reasoning", "")
             }
@@ -242,12 +255,92 @@ class CategoryService:
             return {"success": False, "error": str(e)}
     
     def _classify_with_ai(self, text: str, title: str) -> Dict[str, Any]:
-        """使用AI进行文档分类"""
+        """使用AI进行多标签文档分类"""
         if not self.openai_enabled:
             return {"success": False, "error": "AI classification not available"}
         
         try:
-            # 构建分类提示词
+            # 构建多标签分类提示词
+            prompt = self._build_multi_label_classification_prompt(text, title)
+            
+            # 调用GPT-4o-mini
+            response = self.openai_client.chat.completions.create(
+                model=self.classification_model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "你是一个专业的文档分类助手。请根据文档内容进行多标签分类，可以选择多个相关分类，并返回JSON格式的结果。"
+                    },
+                    {
+                        "role": "user", 
+                        "content": prompt
+                    }
+                ],
+                temperature=0.1,
+                max_tokens=800
+            )
+            
+            result_text = response.choices[0].message.content.strip()
+            
+            # 解析JSON结果
+            try:
+                result = json.loads(result_text)
+                
+                # 验证结果格式
+                if not all(key in result for key in ["primary", "confidence"]):
+                    raise ValueError("Missing required fields in multi-label classification result")
+                
+                # 验证分类名称
+                valid_categories = [cat["name"] for cat in self.SYSTEM_CATEGORIES]
+                
+                # 验证主分类
+                if result["primary"] not in valid_categories:
+                    result["primary"] = self._find_closest_category(result["primary"])
+                
+                # 验证次要分类
+                secondary = result.get("secondary", [])
+                if isinstance(secondary, list):
+                    result["secondary"] = [cat for cat in secondary if cat in valid_categories]
+                else:
+                    result["secondary"] = []
+                
+                # 验证置信度
+                confidence = result.get("confidence", {})
+                if isinstance(confidence, dict):
+                    # 确保置信度在合理范围内
+                    for cat in confidence:
+                        if cat in valid_categories:
+                            confidence[cat] = max(0.0, min(1.0, float(confidence[cat])))
+                else:
+                    # 降级处理：如果confidence不是字典，创建默认置信度
+                    confidence = {result["primary"]: 0.8}
+                    for cat in result["secondary"]:
+                        confidence[cat] = 0.5
+                
+                result["confidence"] = confidence
+                
+                return {
+                    "success": True,
+                    "primary": result["primary"],
+                    "secondary": result["secondary"],
+                    "confidence": result["confidence"],
+                    "reasoning": result.get("reasoning", "")
+                }
+                
+            except (json.JSONDecodeError, ValueError, KeyError) as e:
+                logger.error(f"Error parsing multi-label classification result: {e}, raw result: {result_text}")
+                # 降级到单标签分类
+                return self._classify_with_ai_single_label(text, title)
+            
+        except Exception as e:
+            logger.error(f"Error in AI multi-label classification: {e}")
+            # 降级到单标签分类
+            return self._classify_with_ai_single_label(text, title)
+    
+    def _classify_with_ai_single_label(self, text: str, title: str) -> Dict[str, Any]:
+        """单标签AI分类（降级方案）"""
+        try:
+            # 构建单标签分类提示词
             prompt = self._build_classification_prompt(text, title)
             
             # 调用GPT-4o-mini
@@ -268,43 +361,74 @@ class CategoryService:
             )
             
             result_text = response.choices[0].message.content.strip()
+            result = json.loads(result_text)
             
-            # 解析JSON结果
-            try:
-                result = json.loads(result_text)
-                
-                # 验证结果格式
-                if not all(key in result for key in ["category", "confidence"]):
-                    raise ValueError("Missing required fields in classification result")
-                
-                # 验证分类名称
-                valid_categories = [cat["name"] for cat in self.SYSTEM_CATEGORIES]
-                if result["category"] not in valid_categories:
-                    # 降级到最相似的分类
-                    result["category"] = self._find_closest_category(result["category"])
-                
-                # 确保置信度在合理范围内
-                result["confidence"] = max(0.0, min(1.0, float(result["confidence"])))
-                
-                return {
-                    "success": True,
-                    "category": result["category"],
-                    "confidence": result["confidence"],
-                    "reasoning": result.get("reasoning", "")
-                }
-                
-            except (json.JSONDecodeError, ValueError, KeyError) as e:
-                logger.error(f"Error parsing classification result: {e}, raw result: {result_text}")
-                # 降级到基于关键词的分类
-                return self._classify_by_keywords(text, title)
+            # 转换为多标签格式
+            return {
+                "success": True,
+                "primary": result["category"],
+                "secondary": [],
+                "confidence": {result["category"]: result["confidence"]},
+                "reasoning": result.get("reasoning", "")
+            }
             
         except Exception as e:
-            logger.error(f"Error in AI classification: {e}")
-            # 降级到基于关键词的分类
-            return self._classify_by_keywords(text, title)
+            logger.error(f"Error in single-label AI classification: {e}")
+            # 最终降级到关键词分类
+            keyword_result = self._classify_by_keywords(text, title)
+            if keyword_result["success"]:
+                return {
+                    "success": True,
+                    "primary": keyword_result["category"],
+                    "secondary": [],
+                    "confidence": {keyword_result["category"]: keyword_result["confidence"]},
+                    "reasoning": keyword_result.get("reasoning", "")
+                }
+            return keyword_result
+    
+    def _build_multi_label_classification_prompt(self, text: str, title: str) -> str:
+        """构建多标签分类提示词"""
+        # 截取文本前1000字符以避免token限制
+        text_sample = text[:1000] + "..." if len(text) > 1000 else text
+        
+        categories_desc = "\n".join([
+            f"{i+1}. {cat['name']} - {cat['description']}"
+            for i, cat in enumerate(self.SYSTEM_CATEGORIES)
+        ])
+        
+        return f"""请为以下内容进行智能分类，可以选择多个相关分类：
+
+可选分类：
+{categories_desc}
+
+内容标题：{title}
+内容文本：{text_sample}
+
+请返回JSON格式：
+{{
+  "primary": "主要分类名称",
+  "secondary": ["次要分类1", "次要分类2"],
+  "confidence": {{
+    "分类名": 0.85,
+    "分类名": 0.45
+  }},
+  "reasoning": "分类理由"
+}}
+
+要求：
+1. primary必须是置信度最高的分类
+2. secondary包含置信度>0.3的其他相关分类
+3. 如果内容明显跨多个领域，可以设置多个secondary
+4. confidence中包含所有相关分类的置信度分数
+5. 根据内容的主要用途和性质进行分类，而不是表面特征
+6. 对于图片，重点分析其用途、场景和可能的应用领域
+7. 对于文档，重点分析其内容主题、目标受众和使用场景
+8. 如果内容具有明显的跨领域特征，应该设置合适的次要分类
+
+请直接返回JSON，不要包含其他文字。"""
     
     def _build_classification_prompt(self, text: str, title: str) -> str:
-        """构建分类提示词"""
+        """构建单标签分类提示词（降级方案）"""
         # 截取文本前1000字符以避免token限制
         text_sample = text[:1000] + "..." if len(text) > 1000 else text
         

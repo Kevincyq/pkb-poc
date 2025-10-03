@@ -28,6 +28,9 @@ interface DocumentCardProps {
     name: string;
     color: string;
     is_system: boolean;
+    confidence?: number;
+    role?: string;
+    source?: string;
   }>;
   onClick?: () => void;
   onDelete?: (id: string) => void;
@@ -476,20 +479,50 @@ export default function DocumentCard({
               flexWrap: 'wrap',
               gap: '4px'
             }}>
-              {categories.map((category) => (
-                <Tag 
-                  key={category.id}
-                  color={category.color}
-                  style={{
-                    fontSize: '10px',
-                    padding: '0 4px',
-                    margin: 0,
-                    border: category.is_system ? 'none' : '1px dashed'
-                  }}
-                >
-                  {category.is_system ? '🤖' : '📁'} {category.name}
-                </Tag>
-              ))}
+              {categories.map((category) => {
+                // 根据角色确定样式
+                const isPrimary = category.role === 'primary_system';
+                const isSecondary = category.role === 'secondary_system';
+                const isUserRule = category.role === 'user_rule';
+                
+                // 确定图标和样式
+                let icon = '🤖';
+                let borderStyle = 'none';
+                let opacity = 1;
+                
+                if (isUserRule) {
+                  icon = '📁';
+                  borderStyle = '1px dashed';
+                } else if (isSecondary) {
+                  icon = '🔗';
+                  opacity = 0.8;
+                } else if (isPrimary) {
+                  icon = '⭐';
+                }
+                
+                return (
+                  <Tag 
+                    key={category.id}
+                    color={category.color}
+                    style={{
+                      fontSize: '10px',
+                      padding: '0 4px',
+                      margin: 0,
+                      border: borderStyle,
+                      opacity: opacity,
+                      fontWeight: isPrimary ? 'bold' : 'normal'
+                    }}
+                    title={`${category.name} (${category.role}, 置信度: ${(category.confidence || 0) * 100}%)`}
+                  >
+                    {icon} {category.name}
+                    {category.confidence && category.confidence < 1 && (
+                      <span style={{ fontSize: '8px', opacity: 0.7 }}>
+                        {Math.round(category.confidence * 100)}%
+                      </span>
+                    )}
+                  </Tag>
+                );
+              })}
             </div>
           )}
           
