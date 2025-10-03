@@ -40,12 +40,13 @@ class QuickClassificationService:
     def __init__(self, db: Session):
         self.db = db
     
-    def quick_classify(self, content_id: str) -> Dict[str, Any]:
+    def quick_classify(self, content_id: str, update_display: bool = True) -> Dict[str, Any]:
         """
         快速分类内容
         
         Args:
             content_id: 内容ID
+            update_display: 是否更新前端显示状态
             
         Returns:
             快速分类结果
@@ -98,13 +99,26 @@ class QuickClassificationService:
                 content_id=content_uuid,
                 category_id=category.id,
                 confidence=classification_result["confidence"],
-                reasoning=f"快速分类: {classification_result.get('reasoning', '')}"
+                reasoning=f"快速分类: {classification_result.get('reasoning', '')}",
+                role="primary_system",  # 系统主分类
+                source="heuristic"      # 基于规则的快速分类
             )
             
             self.db.add(content_category)
+            
+            # 更新Content的分类状态
+            if content.meta is None:
+                content.meta = {}
+            
+            content.meta["classification_status"] = "quick_done"
+            if update_display:
+                content.meta["show_classification"] = True
+            else:
+                content.meta["show_classification"] = False
+            
             self.db.commit()
             
-            logger.info(f"Quick classified content {content_id} as {category.name}")
+            logger.info(f"Quick classified content {content_id} as {category.name} (display: {update_display})")
             
             return {
                 "success": True,
@@ -113,7 +127,8 @@ class QuickClassificationService:
                 "category_name": category.name,
                 "confidence": classification_result["confidence"],
                 "reasoning": classification_result.get("reasoning", ""),
-                "is_quick": True
+                "is_quick": True,
+                "display_updated": update_display
             }
             
         except Exception as e:

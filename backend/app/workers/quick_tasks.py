@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 @celery_app.task(name="app.workers.quick_tasks.quick_classify_content", queue="quick", priority=9)
 def quick_classify_content(content_id: str):
     """
-    快速分类内容 - 高优先级任务
+    快速分类内容 - 高优先级任务（后台执行，不更新前端显示）
     
     Args:
         content_id: 内容ID
@@ -28,11 +28,11 @@ def quick_classify_content(content_id: str):
         # 初始化快速分类服务
         quick_service = QuickClassificationService(db)
         
-        # 执行快速分类
-        result = quick_service.quick_classify(content_id)
+        # 执行快速分类（后台执行，不更新show_classification状态）
+        result = quick_service.quick_classify(content_id, update_display=False)
         
         if result["success"]:
-            logger.info(f"Quick classified content {content_id} as {result.get('category_name', 'unknown')}")
+            logger.info(f"Quick classified content {content_id} as {result.get('category_name', 'unknown')} (background only)")
         else:
             logger.error(f"Failed to quick classify content {content_id}: {result.get('error', 'unknown error')}")
         

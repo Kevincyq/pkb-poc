@@ -171,23 +171,36 @@ class CategoryService:
             if not category:
                 return {"success": False, "error": f"Category not found: {classification_result['category']}"}
             
-            # 删除现有分类（如果是重新分类或覆盖快速分类）
-            existing_to_delete = self.db.query(ContentCategory).filter(
-                ContentCategory.content_id == content_uuid
-            ).first()
+            # 删除现有的系统分类（快速分类），保留合集分类
+            existing_system_classifications = self.db.query(ContentCategory).join(
+                Category, ContentCategory.category_id == Category.id
+            ).filter(
+                ContentCategory.content_id == content_uuid,
+                Category.is_system == True  # 只删除系统分类
+            ).all()
             
-            if existing_to_delete:
-                self.db.delete(existing_to_delete)
+            for existing in existing_system_classifications:
+                self.db.delete(existing)
             
             # 创建新的分类关联
             content_category = ContentCategory(
                 content_id=content_uuid,
                 category_id=category.id,
                 confidence=classification_result["confidence"],
-                reasoning=classification_result.get("reasoning", "")
+                reasoning=classification_result.get("reasoning", ""),
+                role="primary_system",  # 系统主分类
+                source="ml"             # AI机器学习分类
             )
             
             self.db.add(content_category)
+            
+            # 更新Content的分类状态（AI分类完成，允许前端显示）
+            if content.meta is None:
+                content.meta = {}
+            
+            content.meta["classification_status"] = "ai_done"
+            content.meta["show_classification"] = True  # AI分类完成后允许显示
+            
             self.db.commit()
             
             logger.info(f"Successfully classified content {content_id} as {category.name}")

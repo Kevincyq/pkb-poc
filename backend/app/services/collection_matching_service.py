@@ -176,10 +176,20 @@ class CollectionMatchingService:
                 else:
                     logger.debug(f"❌ Document {content_id} did not match collection {collection.name}")
             
-            # 提交所有关联创建
+            # 更新Content的分类状态（合集匹配完成）
+            if content.meta is None:
+                content.meta = {}
+            
+            content.meta["classification_status"] = "completed"
+            # 保持show_classification状态不变，由AI分类决定
+            
+            # 提交所有关联创建和状态更新
+            self.db.commit()
+            
             if matched_collections:
-                self.db.commit()
-                logger.info(f"Committed {len(matched_collections)} collection associations")
+                logger.info(f"Committed {len(matched_collections)} collection associations and updated status")
+            else:
+                logger.info(f"No collections matched, but updated status to completed")
             
             return matched_collections
             
@@ -338,7 +348,9 @@ class CollectionMatchingService:
                 content_id=content_uuid,
                 category_id=collection.category_id,
                 confidence=0.8,  # 自动匹配的置信度
-                reasoning=f"自动匹配到合集: {collection.name}"
+                reasoning=f"自动匹配到合集: {collection.name}",
+                role="user_rule",  # 用户规则分类
+                source="rule"      # 基于规则的分类
             )
             
             self.db.add(content_category)

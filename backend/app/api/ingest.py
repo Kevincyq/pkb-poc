@@ -363,9 +363,24 @@ async def _process_single_file(file: UploadFile, db: Session):
         upload_dir = Path("/app/uploads")
         upload_dir.mkdir(parents=True, exist_ok=True)
         
-        file_id = str(uuid.uuid4())
-        file_extension = Path(file.filename).suffix
-        temp_file_path = upload_dir / f"{file_id}{file_extension}"
+        # 使用原始文件名，处理重名冲突
+        def get_unique_filename(upload_dir: Path, original_filename: str) -> str:
+            """生成唯一文件名，重名时添加时间戳"""
+            base_path = upload_dir / original_filename
+            
+            if not base_path.exists():
+                return original_filename
+            
+            # 生成时间戳
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            name_part = Path(original_filename).stem
+            extension = Path(original_filename).suffix
+            
+            return f"{name_part}_{timestamp}{extension}"
+        
+        actual_filename = get_unique_filename(upload_dir, file.filename)
+        temp_file_path = upload_dir / actual_filename
         
         # 保存上传的文件
         with open(temp_file_path, "wb") as buffer:
@@ -376,9 +391,9 @@ async def _process_single_file(file: UploadFile, db: Session):
         try:
             from app.api.files import pregenerate_thumbnail_if_image
             if pregenerate_thumbnail_if_image(temp_file_path):
-                log.info(f"Pre-generated thumbnail for uploaded image: {file.filename}")
+                log.info(f"Pre-generated thumbnail for uploaded image: {actual_filename}")
         except Exception as e:
-            log.warning(f"Failed to pre-generate thumbnail for {file.filename}: {e}")
+            log.warning(f"Failed to pre-generate thumbnail for {actual_filename}: {e}")
         
         # 3. 立即解析文件内容
         try:
@@ -392,18 +407,22 @@ async def _process_single_file(file: UploadFile, db: Session):
         
         # 4. 立即创建Content记录（processing状态）
         content_record = Content(
-            title=file.filename,
+            title=file.filename,  # 始终保存用户原始文件名
             text=file_text,
             modality='image' if file_metadata.get('detected_type') == 'image' else 'text',
             meta={
                 **file_metadata,
                 "source_type": "webui",
+                "classification_status": "pending",  # 分类状态
+                "show_classification": False,        # 是否向前端显示分类结果
                 "processing_status": "processing",
                 "file_size": len(content),
-                "file_path": str(temp_file_path),  # 保存实际文件路径
+                "file_path": str(temp_file_path),     # 保存实际文件路径
+                "original_filename": file.filename,   # 用户上传的原始文件名
+                "stored_filename": actual_filename,   # 实际存储的文件名
                 "upload_timestamp": str(uuid.uuid4())  # 临时用作唯一标识
             },
-            source_uri=f"webui://{file.filename}",
+            source_uri=f"webui://{actual_filename}",  # 使用实际存储的文件名
             created_by="webui.upload"
         )
         
@@ -438,7 +457,9 @@ async def _process_single_file(file: UploadFile, db: Session):
                 priority=8
             )
         
-        # 快速分类（立即执行，最高优先级）
+        # 方案A：并行执行，6秒内完成所有分类任务
+        
+        # 快速分类（1秒后执行，后台执行不显示给用户）
         from app.workers.quick_tasks import quick_classify_content
         quick_classify_content.apply_async(
             args=[str(content_record.id)],
@@ -447,21 +468,21 @@ async def _process_single_file(file: UploadFile, db: Session):
             countdown=1   # 1秒后执行
         )
         
-        # 智能合集匹配（在快速分类之后执行）
+        # AI精确分类（2秒后执行，与快速分类并行）
+        classify_content.apply_async(
+            args=[str(content_record.id)],
+            queue="classify",
+            priority=9,   # 高优先级
+            countdown=2   # 2秒后执行，与快速分类并行
+        )
+        
+        # 智能合集匹配（5秒后执行，基于AI分类结果）
         from app.workers.quick_tasks import match_document_to_collections
         match_document_to_collections.apply_async(
             args=[str(content_record.id)],
             queue="quick",
-            priority=9,   # 次高优先级
-            countdown=3   # 3秒后执行，确保快速分类完成
-        )
-        
-        # AI精确分类（最后执行，覆盖快速分类）
-        classify_content.apply_async(
-            args=[str(content_record.id)],
-            queue="classify",
-            priority=7,
-            countdown=5   # 5秒后执行，足够等待快速分类和合集匹配完成
+            priority=8,   # 次高优先级
+            countdown=5   # 5秒后执行，基于AI分类结果
         )
         
         # 7. 保留文件（持久化存储，不删除）
@@ -487,42 +508,50 @@ async def _process_single_file(file: UploadFile, db: Session):
 @router.get("/status/{content_id}")
 def get_processing_status(content_id: str, db: Session = Depends(get_db)):
     """
-    查询文件处理状态
+    查询文件处理状态和分类状态
     """
     try:
         content = db.query(Content).filter(Content.id == content_id).first()
         if not content:
             raise HTTPException(status_code=404, detail="文件不存在")
         
-        # 检查分类状态
+        # 获取分类状态信息
+        classification_status = content.meta.get("classification_status", "pending") if content.meta else "pending"
+        show_classification = content.meta.get("show_classification", False) if content.meta else False
+        processing_status = content.meta.get("processing_status", "unknown") if content.meta else "unknown"
+        
+        # 检查分类结果
         from app.models import ContentCategory
         categories = db.query(ContentCategory).filter(
             ContentCategory.content_id == content_id
         ).all()
         
-        processing_status = content.meta.get("processing_status", "unknown")
-        
-        # 如果有分类结果，更新状态
-        if categories:
-            processing_status = "completed"
-            # 更新数据库中的状态
-            content.meta["processing_status"] = "completed"
-            db.commit()
-        
-        return {
+        # 构建返回结果
+        result = {
             "content_id": content_id,
             "title": content.title,
             "processing_status": processing_status,
-            "categories": [
+            "classification_status": classification_status,
+            "show_classification": show_classification,
+            "created_at": content.created_at.isoformat() if content.created_at else None
+        }
+        
+        # 只有在允许显示分类时才返回分类信息
+        if show_classification and categories:
+            result["categories"] = [
                 {
                     "id": str(cat.category_id),
                     "name": cat.category.name if cat.category else "Unknown",
-                    "confidence": cat.confidence
+                    "confidence": cat.confidence,
+                    "reasoning": cat.reasoning
                 }
                 for cat in categories
-            ],
-            "created_at": content.created_at.isoformat() if content.created_at else None
-        }
+            ]
+        else:
+            result["categories"] = []
+            result["message"] = "分类中..." if classification_status == "pending" else "分类处理中"
+        
+        return result
         
     except HTTPException:
         raise

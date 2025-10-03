@@ -38,31 +38,24 @@ THUMBNAIL_DIR = Path("/tmp/pkb_thumbnails")
 THUMBNAIL_DIR.mkdir(exist_ok=True)
 
 def get_file_path(filename: str, db: Session) -> Path:
-    """获取文件的实际路径 - 简化版本，支持多个可能的存储位置"""
+    """获取文件的实际路径 - 优化版本，支持原始文件名和存储文件名映射"""
     logger.info(f"Looking for file: {filename}")
     
     try:
-        # 可能的文件存储位置（优先查找持久化目录）
-        possible_locations = [
-            Path("/app/uploads") / filename,
-            Path("/data/uploads") / filename,
-            Path("/var/uploads") / filename,
-            Path("/uploads") / filename,
-            Path("/tmp/pkb_uploads") / filename,  # 临时目录放最后
-        ]
-        
-        # 1. 尝试直接匹配文件名
-        for file_path in possible_locations:
-            if file_path.exists():
-                logger.info(f"Found file via direct match: {filename} -> {file_path}")
-                return file_path
-        
-        # 2. 尝试通过数据库查找
+        # 1. 优先通过数据库查找（支持原始文件名和存储文件名）
+        # 先尝试通过source_uri查找（存储文件名）
         content = db.query(Content).filter(
             Content.source_uri == f"webui://{filename}"
         ).first()
         
+        # 如果没找到，尝试通过原始文件名查找
+        if not content:
+            content = db.query(Content).filter(
+                Content.title == filename
+            ).first()
+        
         if content and content.meta and isinstance(content.meta, dict):
+            # 优先使用数据库中存储的文件路径
             actual_path = content.meta.get('file_path')
             if actual_path:
                 file_path = Path(actual_path)
@@ -72,8 +65,30 @@ def get_file_path(filename: str, db: Session) -> Path:
                     return file_path
                 else:
                     logger.warning(f"Database file path does not exist: {actual_path}")
+            
+            # 如果数据库路径不存在，尝试使用存储文件名
+            stored_filename = content.meta.get('stored_filename')
+            if stored_filename:
+                stored_path = Path("/app/uploads") / stored_filename
+                if stored_path.exists():
+                    logger.info(f"Found file via stored filename: {filename} -> {stored_path}")
+                    return stored_path
         else:
-            logger.info(f"No database record found for webui://{filename}")
+            logger.info(f"No database record found for: {filename}")
+        
+        # 2. 尝试直接匹配文件名（备用方案）
+        possible_locations = [
+            Path("/app/uploads") / filename,
+            Path("/data/uploads") / filename,
+            Path("/var/uploads") / filename,
+            Path("/uploads") / filename,
+            Path("/tmp/pkb_uploads") / filename,  # 临时目录放最后
+        ]
+        
+        for file_path in possible_locations:
+            if file_path.exists():
+                logger.info(f"Found file via direct match: {filename} -> {file_path}")
+                return file_path
         
         # 3. 尝试在各个目录中按文件名模糊匹配（而非仅按扩展名）
         target_name = Path(filename).stem.lower()  # 获取不带扩展名的文件名
