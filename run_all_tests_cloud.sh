@@ -29,9 +29,9 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-# 安装后端测试依赖
-echo "📦 安装后端测试依赖..."
-pip3 install pytest pytest-asyncio pytest-cov httpx pytest-mock
+# 安装后端依赖
+echo "📦 安装后端依赖..."
+pip3 install -r requirements-test.txt
 
 # 设置Python路径
 export PYTHONPATH=$(pwd)

@@ -4,3 +4,10 @@ pytest-asyncio==0.21.1
 pytest-cov==4.1.0
 httpx==0.25.2
 pytest-mock==3.12.0
+
+# 应用基础依赖（测试需要）
+fastapi
+sqlalchemy
+pydantic
+python-dateutil
+openai>=1.0.0
