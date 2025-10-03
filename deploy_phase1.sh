@@ -72,7 +72,7 @@ sleep 5   # 等待backend服务启动
 
 # 4. 运行迁移
 echo "🔄 Running Phase 1 migration..."
-docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T pkb-backend python -m app.migrate_phase1 --force
+docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T pkb-backend python app/migrate_phase1.py --force
 
 if [ $? -eq 0 ]; then
     echo "✅ Migration completed successfully"
