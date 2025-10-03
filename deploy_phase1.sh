@@ -67,12 +67,12 @@ docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME up -d postgres redis
 sleep 10  # 等待数据库启动
 
 echo "🚀 Starting backend service..."
-docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME up -d backend
+docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME up -d pkb-backend
 sleep 5   # 等待backend服务启动
 
 # 4. 运行迁移
 echo "🔄 Running Phase 1 migration..."
-docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T backend python -m app.migrate_phase1 --force
+docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T pkb-backend python -m app.migrate_phase1 --force
 
 if [ $? -eq 0 ]; then
     echo "✅ Migration completed successfully"
@@ -92,7 +92,7 @@ fi
 
 # 5. 验证迁移结果
 echo "🔍 Verifying migration..."
-docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T backend python -c "
+docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T pkb-backend python -c "
 from app.db import SessionLocal
 from sqlalchemy import text, inspect
 import sys
