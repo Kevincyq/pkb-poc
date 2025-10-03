@@ -14,10 +14,13 @@ export interface ProcessingStatus {
   content_id: string;
   title: string;
   processing_status: 'processing' | 'completed' | 'error';
+  classification_status: 'pending' | 'quick_done' | 'ai_done' | 'completed';
+  show_classification: boolean;
   categories: Array<{
     id: string;
     name: string;
     confidence: number;
+    reasoning?: string;
   }>;
   created_at: string | null;
 }

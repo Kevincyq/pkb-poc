@@ -277,20 +277,22 @@ export default function Home() {
         // 更新文件状态
         setUploadFiles(prev => prev.map(f => {
           if (f.id === fileId) {
+            console.log(`🔄 Updating file status for ${fileId}:`, {
+              classification_status: statusData.classification_status,
+              show_classification: statusData.show_classification,
+              categories: statusData.categories
+            });
+            
             // 根据classification_status和show_classification来判断状态
-            if (statusData.classification_status === 'pending' || !statusData.show_classification) {
-              return {
-                ...f,
-                status: 'classifying',
-                progress: statusData.classification_status === 'quick_done' ? 50 : 
-                         statusData.classification_status === 'ai_done' ? 80 : 30
-              };
-            } else if (statusData.classification_status === 'completed' && statusData.show_classification) {
+            if (statusData.classification_status === 'completed' && statusData.show_classification) {
+              // 分类完成，显示结果
               const categories = statusData.categories?.map((cat: any) => ({
                 id: cat.id,
                 name: cat.name,
                 confidence: cat.confidence || 0.8
               })) || [];
+              
+              console.log(`✅ File ${fileId} classification completed with categories:`, categories);
               
               return {
                 ...f,
@@ -298,16 +300,36 @@ export default function Home() {
                 progress: 100,
                 categories
               };
+            } else if (statusData.classification_status === 'pending' || !statusData.show_classification) {
+              // 分类中
+              const progress = statusData.classification_status === 'quick_done' ? 50 : 
+                              statusData.classification_status === 'ai_done' ? 80 : 30;
+              
+              console.log(`⏳ File ${fileId} still classifying, progress: ${progress}%`);
+              
+              return {
+                ...f,
+                status: 'classifying',
+                progress
+              };
+            } else {
+              // 其他状态，保持当前状态
+              console.log(`🤔 File ${fileId} unknown status, keeping current state`);
+              return f;
             }
           }
           return f;
         }));
         
+        // 检查是否应该停止轮询
         if (statusData.classification_status === 'completed' && statusData.show_classification) {
+          console.log(`🛑 Stopping polling for ${fileId} - classification completed`);
           clearInterval(pollInterval);
           
           // 刷新页面数据
           loadCategories();
+        } else {
+          console.log(`🔄 Continuing polling for ${fileId} - status: ${statusData.classification_status}, show: ${statusData.show_classification}`);
         }
       } catch (error) {
         console.error('Status polling error:', error);
