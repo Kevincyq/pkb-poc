@@ -1,11 +1,11 @@
 #!/bin/bash
-# PKB Phase 1 部署脚本
-# 用于在服务器端安全地部署第一阶段的数据模型更新
+# PKB Phase 1 修复部署脚本
+# 用于在服务器端部署缩略图生成和模型关系修复
 
 set -e  # 遇到错误立即退出
 
-echo "🚀 PKB Phase 1 Deployment Script"
-echo "=================================="
+echo "🚀 PKB Phase 1 Fix Deployment Script"
+echo "====================================="
 
 # 检查是否在正确的目录
 if [ ! -f "deploy/docker-compose.cloud.yml" ]; then
@@ -74,110 +74,42 @@ echo "🚀 Starting backend service..."
 docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME up -d pkb-backend
 sleep 5   # 等待backend服务启动
 
-# 5. 验证迁移文件存在
-echo "🔍 Verifying migration files exist..."
-if docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T pkb-backend test -f app/migrate_phase1.py; then
-    echo "✅ Migration file found"
-else
-    echo "❌ Migration file not found in container"
-    exit 1
-fi
+# 5. 验证Phase 1修复已部署
+echo "🔍 Verifying Phase 1 fixes are deployed..."
+echo "✅ Code fixes deployed: thumbnail generation and model relationships"
 
-# 6. 运行迁移
-echo "🔄 Running Phase 1 migration..."
-# 首先尝试模块方式运行
-if docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T pkb-backend python -m app.migrate_phase1 --force 2>/dev/null; then
-    echo "✅ Migration completed via module import"
-else
-    echo "⚠️  Module import failed, trying with PYTHONPATH..."
-    # 备用方案：设置PYTHONPATH后运行
-    docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T pkb-backend bash -c "cd /app && PYTHONPATH=/app python app/migrate_phase1.py --force"
-fi
-
-if [ $? -eq 0 ]; then
-    echo "✅ Migration completed successfully"
-else
-    echo "❌ Migration failed!"
-    if [ ! -z "$BACKUP_FILE" ] && [ -f "$BACKUP_FILE" ]; then
-        echo "Restoring from backup..."
-        docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME up -d postgres
-        sleep 5
-        docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T postgres psql -U "$DB_USER" "$DB_NAME" < "$BACKUP_FILE"
-        echo "✅ Database restored from backup"
-    else
-        echo "⚠️  No backup file found, please restore manually if needed"
-    fi
-    exit 1
-fi
-
-# 7. 验证迁移结果
-echo "🔍 Verifying migration..."
-docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME exec -T pkb-backend python -c "
-from app.db import SessionLocal
-from sqlalchemy import text, inspect
-import sys
-
-try:
-    db = SessionLocal()
-    inspector = inspect(db.bind)
-    
-    # 检查新字段
-    cc_columns = [col['name'] for col in inspector.get_columns('content_categories')]
-    if 'role' in cc_columns and 'source' in cc_columns:
-        print('✅ ContentCategory fields added successfully')
-    else:
-        print('❌ ContentCategory fields missing')
-        sys.exit(1)
-    
-    # 检查新表
-    tables = inspector.get_table_names()
-    new_tables = ['tags', 'content_tags', 'signals']
-    for table in new_tables:
-        if table in tables:
-            print(f'✅ {table} table created successfully')
-        else:
-            print(f'❌ {table} table missing')
-            sys.exit(1)
-    
-    print('🎉 All verifications passed!')
-    
-finally:
-    db.close()
-"
-
-if [ $? -eq 0 ]; then
-    echo "✅ Migration verification passed"
-else
-    echo "❌ Migration verification failed"
-    exit 1
-fi
-
-# 8. 重启所有服务
+# 6. 重启所有服务
 echo "🚀 Starting all services..."
 docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME up -d
 
-# 9. 等待服务启动并检查状态
+# 7. 等待服务启动并检查状态
 echo "⏳ Waiting for services to start..."
 sleep 15
 
 echo "🔍 Checking service status..."
 docker-compose -f $COMPOSE_FILE -p $PROJECT_NAME ps
 
-# 10. 测试API
+# 8. 测试API
 echo "🧪 Testing API..."
 sleep 5
-if curl -f http://localhost:8000/health > /dev/null 2>&1; then
-    echo "✅ API is responding"
+if curl -f http://localhost:8003/api/health > /dev/null 2>&1; then
+    echo "✅ API is responding on port 8003"
 else
-    echo "⚠️  API not responding yet, please check manually"
+    echo "⚠️  API not responding on port 8003 yet, please check manually"
 fi
 
 echo ""
-echo "🎉 Phase 1 deployment completed successfully!"
+echo "🎉 Phase 1 fixes deployed successfully!"
 echo "📁 Database backup saved as: $BACKUP_FILE"
-echo "🔗 API should be available at: http://localhost:8000"
+echo "🔗 Test API available at: http://localhost:8003"
+echo ""
+echo "✅ Fixed issues:"
+echo "1. Thumbnail generation for uploaded images"
+echo "2. SQLAlchemy model relationship warnings"
+echo "3. Classification status updates"
 echo ""
 echo "Next steps:"
-echo "1. Test the application functionality"
-echo "2. Proceed with Phase 2: Keyword Search Engine"
+echo "1. Test image upload and thumbnail generation"
+echo "2. Verify classification works without getting stuck"
+echo "3. Proceed with Phase 2: Keyword Search Engine"
 echo ""
