@@ -8,7 +8,8 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.db import Base
-from app.models import Content, Category, Collection, ContentCategory
+# 使用测试专用模型，避免 pgvector 依赖
+from tests.test_models import TestContent as Content, TestCategory as Category, TestCollection as Collection, TestContentCategory as ContentCategory
 from datetime import datetime
 import uuid
 

@@ -13,15 +13,16 @@ fi
 cd backend
 
 echo "📦 安装测试依赖..."
-pip3 install -r requirements-test.txt
+# 只安装测试必需的依赖，不包含生产环境的 PostgreSQL 扩展
+pip3 install pytest pytest-asyncio pytest-cov httpx pytest-mock fastapi sqlalchemy pydantic python-dateutil openai
 
 echo "🔧 设置测试环境..."
 # 设置Python路径
 export PYTHONPATH=$(pwd)
 
-# 设置测试环境变量（防止数据库连接问题）
+# 设置测试环境变量（使用内存数据库）
 export TESTING=true
-export DATABASE_URL=""  # 测试时不使用真实数据库
+export DATABASE_URL="sqlite:///:memory:"  # 使用内存SQLite数据库
 
 echo "🧪 运行后端测试..."
 echo "Python路径: $PYTHONPATH"
