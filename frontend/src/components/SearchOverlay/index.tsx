@@ -123,17 +123,26 @@ export default function SearchOverlay({ visible, onClose }: SearchOverlayProps) 
 
   // 高亮关键词
   const highlightKeywords = (text: string, keywords: string) => {
-    if (!keywords.trim()) return text;
+    if (!keywords.trim() || !text) return text || '';
     
-    const keywordList = keywords.trim().split(/\s+/);
-    let highlightedText = text;
-    
-    keywordList.forEach(keyword => {
-      const regex = new RegExp(`(${keyword})`, 'gi');
-      highlightedText = highlightedText.replace(regex, '<mark>$1</mark>');
-    });
-    
-    return highlightedText;
+    try {
+      const keywordList = keywords.trim().split(/\s+/);
+      let highlightedText = text;
+      
+      keywordList.forEach(keyword => {
+        if (keyword.length > 0) {
+          // 转义特殊正则字符
+          const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const regex = new RegExp(`(${escapedKeyword})`, 'gi');
+          highlightedText = highlightedText.replace(regex, '<mark>$1</mark>');
+        }
+      });
+      
+      return highlightedText;
+    } catch (error) {
+      console.error('Error in highlightKeywords:', error);
+      return text || '';
+    }
   };
 
   // 获取文件类型图标
@@ -203,7 +212,7 @@ export default function SearchOverlay({ visible, onClose }: SearchOverlayProps) 
                           <Text 
                             strong 
                             dangerouslySetInnerHTML={{
-                              __html: highlightKeywords(item.title, searchQuery)
+                              __html: highlightKeywords(item.title || '', searchQuery)
                             }}
                             style={{ marginLeft: 8 }}
                           />
@@ -229,7 +238,7 @@ export default function SearchOverlay({ visible, onClose }: SearchOverlayProps) 
                           className="search-result-snippet"
                           dangerouslySetInnerHTML={{
                             __html: highlightKeywords(
-                              item.text.substring(0, 150) + (item.text.length > 150 ? '...' : ''),
+                              (item.text || '').substring(0, 150) + ((item.text || '').length > 150 ? '...' : ''),
                               searchQuery
                             )
                           }}
