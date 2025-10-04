@@ -3,6 +3,7 @@ import { Input, List, Typography, Spin, Empty, Tag } from 'antd';
 import { SearchOutlined, FileOutlined, CloseOutlined } from '@ant-design/icons';
 import api from '../../services/api';
 import ErrorBoundary from '../ErrorBoundary';
+import HighlightText from './HighlightText';
 import './SearchOverlay.css';
 
 const { Text } = Typography;
@@ -122,29 +123,6 @@ export default function SearchOverlay({ visible, onClose }: SearchOverlayProps) 
     }
   };
 
-  // 高亮关键词
-  const highlightKeywords = (text: string, keywords: string) => {
-    if (!keywords.trim() || !text) return text || '';
-    
-    try {
-      const keywordList = keywords.trim().split(/\s+/);
-      let highlightedText = text;
-      
-      keywordList.forEach(keyword => {
-        if (keyword.length > 0) {
-          // 转义特殊正则字符
-          const escapedKeyword = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const regex = new RegExp(`(${escapedKeyword})`, 'gi');
-          highlightedText = highlightedText.replace(regex, '<mark>$1</mark>');
-        }
-      });
-      
-      return highlightedText;
-    } catch (error) {
-      console.error('Error in highlightKeywords:', error);
-      return text || '';
-    }
-  };
 
   // 获取文件类型图标
   const getFileIcon = (modality: string) => {
@@ -219,12 +197,10 @@ export default function SearchOverlay({ visible, onClose }: SearchOverlayProps) 
                             <div className="search-result-header">
                               <div className="search-result-title">
                                 {getFileIcon(item.modality || '')}
-                                <Text 
-                                  strong 
-                                  dangerouslySetInnerHTML={{
-                                    __html: highlightKeywords(item.title || 'Untitled', searchQuery)
-                                  }}
-                                  style={{ marginLeft: 8 }}
+                                <HighlightText
+                                  text={item.title || 'Untitled'}
+                                  searchQuery={searchQuery}
+                                  style={{ marginLeft: 8, fontWeight: 'bold' }}
                                 />
                               </div>
                               <div className="search-result-categories">
@@ -246,15 +222,11 @@ export default function SearchOverlay({ visible, onClose }: SearchOverlayProps) 
                               </div>
                             </div>
                             {item.text && typeof item.text === 'string' && item.text.trim() && (
-                              <Text 
-                                type="secondary" 
+                              <HighlightText
+                                text={item.text.substring(0, 150) + (item.text.length > 150 ? '...' : '')}
+                                searchQuery={searchQuery}
                                 className="search-result-snippet"
-                                dangerouslySetInnerHTML={{
-                                  __html: highlightKeywords(
-                                    item.text.substring(0, 150) + (item.text.length > 150 ? '...' : ''),
-                                    searchQuery
-                                  )
-                                }}
+                                style={{ color: 'rgba(0, 0, 0, 0.65)' }}
                               />
                             )}
                           </div>

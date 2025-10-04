@@ -4,6 +4,7 @@
  */
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import SafeMarkdownRenderer from './SafeMarkdownRenderer';
 
 interface MarkdownRendererProps {
   content: string;
@@ -130,16 +131,8 @@ export default function MarkdownRenderer({ content, className }: MarkdownRendere
   };
 
   return (
-    <div 
-      className={className}
-      onClick={handleLinkClick}
-      dangerouslySetInnerHTML={{ 
-        __html: renderMarkdown(content || '') 
-      }}
-      style={{
-        lineHeight: '1.6',
-        color: '#333'
-      }}
-    />
+    <div onClick={handleLinkClick}>
+      <SafeMarkdownRenderer content={content} className={className} />
+    </div>
   );
 }
