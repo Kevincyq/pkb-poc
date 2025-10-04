@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Input, List, Typography, Spin, Empty, Tag } from 'antd';
 import { SearchOutlined, FileOutlined, CloseOutlined } from '@ant-design/icons';
 import api from '../../services/api';
+import ErrorBoundary from '../ErrorBoundary';
 import './SearchOverlay.css';
 
 const { Text } = Typography;
@@ -198,56 +199,71 @@ export default function SearchOverlay({ visible, onClose }: SearchOverlayProps) 
             </div>
           ) : hasSearched ? (
             searchResults.length > 0 ? (
-              <List
-                dataSource={searchResults}
-                renderItem={(item) => (
-                  <List.Item
-                    className="search-result-item"
-                    onClick={() => handleResultClick(item)}
-                  >
-                    <div className="search-result-content">
-                      <div className="search-result-header">
-                        <div className="search-result-title">
-                          {getFileIcon(item.modality)}
-                          <Text 
-                            strong 
-                            dangerouslySetInnerHTML={{
-                              __html: highlightKeywords(item.title || '', searchQuery)
-                            }}
-                            style={{ marginLeft: 8 }}
-                          />
-                        </div>
-                        <div className="search-result-categories">
-                          {item.category_name && (
-                            <Tag 
-                              color={item.category_color || 'blue'}
-                            >
-                              {item.category_name}
-                            </Tag>
-                          )}
-                          {item.category_confidence && (
-                            <Tag color="green">
-                              {Math.round(item.category_confidence * 100)}%
-                            </Tag>
-                          )}
-                        </div>
-                      </div>
-                      {item.text && (
-                        <Text 
-                          type="secondary" 
-                          className="search-result-snippet"
-                          dangerouslySetInnerHTML={{
-                            __html: highlightKeywords(
-                              (item.text || '').substring(0, 150) + ((item.text || '').length > 150 ? '...' : ''),
-                              searchQuery
-                            )
-                          }}
-                        />
-                      )}
-                    </div>
-                  </List.Item>
-                )}
-              />
+              <ErrorBoundary fallback={<div style={{ padding: '20px', textAlign: 'center' }}>搜索结果渲染出错</div>}>
+                <List
+                  dataSource={searchResults}
+                  renderItem={(item) => {
+                    // 添加安全检查
+                    if (!item || typeof item !== 'object') {
+                      console.error('Invalid search result item:', item);
+                      return null;
+                    }
+
+                    return (
+                      <ErrorBoundary key={item.chunk_id || item.content_id} fallback={<div>结果项渲染出错</div>}>
+                        <List.Item
+                          className="search-result-item"
+                          onClick={() => handleResultClick(item)}
+                        >
+                          <div className="search-result-content">
+                            <div className="search-result-header">
+                              <div className="search-result-title">
+                                {getFileIcon(item.modality || '')}
+                                <Text 
+                                  strong 
+                                  dangerouslySetInnerHTML={{
+                                    __html: highlightKeywords(item.title || 'Untitled', searchQuery)
+                                  }}
+                                  style={{ marginLeft: 8 }}
+                                />
+                              </div>
+                              <div className="search-result-categories">
+                                {item.category_name && typeof item.category_name === 'string' && (
+                                  <Tag 
+                                    color={item.category_color || 'blue'}
+                                  >
+                                    {item.category_name}
+                                  </Tag>
+                                )}
+                                {item.category_confidence && 
+                                 typeof item.category_confidence === 'number' && 
+                                 !isNaN(item.category_confidence) && 
+                                 item.category_confidence > 0 && (
+                                  <Tag color="green">
+                                    {Math.round(item.category_confidence * 100)}%
+                                  </Tag>
+                                )}
+                              </div>
+                            </div>
+                            {item.text && typeof item.text === 'string' && item.text.trim() && (
+                              <Text 
+                                type="secondary" 
+                                className="search-result-snippet"
+                                dangerouslySetInnerHTML={{
+                                  __html: highlightKeywords(
+                                    item.text.substring(0, 150) + (item.text.length > 150 ? '...' : ''),
+                                    searchQuery
+                                  )
+                                }}
+                              />
+                            )}
+                          </div>
+                        </List.Item>
+                      </ErrorBoundary>
+                    );
+                  }}
+                />
+              </ErrorBoundary>
             ) : (
               <Empty 
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
