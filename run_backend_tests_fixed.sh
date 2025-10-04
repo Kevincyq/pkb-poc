@@ -33,18 +33,29 @@ echo "验证模块导入..."
 python3 -c "
 import sys
 print('Python version:', sys.version)
+
+# 验证Mock模型导入
 try:
-    from app.models import Content, Category
-    print('✅ 模型导入成功')
+    from tests.mock_models import Content, Category
+    print('✅ Mock模型导入成功')
 except Exception as e:
-    print('❌ 模型导入失败:', e)
+    print('❌ Mock模型导入失败:', e)
     exit(1)
 
+# 验证conftest导入
 try:
     from tests.conftest import test_db
     print('✅ conftest导入成功')
 except Exception as e:
     print('❌ conftest导入失败:', e)
+    exit(1)
+
+# 验证基础依赖
+try:
+    import sqlalchemy, fastapi, pytest
+    print('✅ 基础依赖导入成功')
+except Exception as e:
+    print('❌ 基础依赖导入失败:', e)
     exit(1)
 "
 

@@ -8,8 +8,8 @@ import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.db import Base
-# 使用测试专用模型，避免 pgvector 依赖
-from tests.test_models import TestContent as Content, TestCategory as Category, TestCollection as Collection, TestContentCategory as ContentCategory
+# Mock pgvector依赖，然后导入原始模型
+from tests.mock_models import Content, Category, Collection, ContentCategory
 from datetime import datetime
 import uuid
 
