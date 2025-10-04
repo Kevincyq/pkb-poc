@@ -52,6 +52,7 @@ export default function DocumentCard({
     id, title, modality, sourceUri, createdAt, hasOnClick: !!onClick, hasOnDelete: !!onDelete
   });
   const [isDeleting, setIsDeleting] = useState(false);
+  const [thumbnailError, setThumbnailError] = useState(false);
   // 根据文件名获取文件类型图标和显示名称
   const getFileTypeIcon = (fileName: string, modality: string) => {
     const extension = fileName.toLowerCase().split('.').pop() || '';
@@ -187,7 +188,7 @@ export default function DocumentCard({
     if (modality === 'image') {
       const thumbnailUrl = getThumbnailUrl(sourceUri);
       
-      if (thumbnailUrl) {
+      if (thumbnailUrl && !thumbnailError) {
         return (
           <div style={{
             width: '100%',
@@ -203,44 +204,9 @@ export default function DocumentCard({
                 height: '100%',
                 objectFit: 'cover'
               }}
-              onError={(e) => {
+              onError={() => {
                 console.log(`❌ Thumbnail failed to load: ${thumbnailUrl}`);
-                console.log('Error event:', e);
-                // 如果真实缩略图加载失败，显示彩色渐变回退
-                const target = e.target as HTMLImageElement;
-                const parent = target.parentElement;
-                if (parent) {
-                  const colorStyle = generateColorThumbnail(title, modality);
-                  if (colorStyle) {
-                    parent.innerHTML = '';
-                    const fallbackDiv = document.createElement('div');
-                    Object.assign(fallbackDiv.style, {
-                      width: '100%',
-                      height: '100%',
-                      ...colorStyle
-                    });
-                    fallbackDiv.innerHTML = `
-                      <div style="
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        gap: 8px;
-                      ">
-                        <div style="font-size: 48px;">🖼️</div>
-                        <div style="
-                          font-size: 12px;
-                          text-align: center;
-                          opacity: 0.9;
-                          max-width: 120px;
-                          overflow: hidden;
-                          text-overflow: ellipsis;
-                          white-space: nowrap;
-                        ">${title}</div>
-                      </div>
-                    `;
-                    parent.appendChild(fallbackDiv);
-                  }
-                }
+                setThumbnailError(true);
               }}
               onLoad={() => {
                 console.log(`✅ Thumbnail loaded successfully: ${thumbnailUrl}`);
