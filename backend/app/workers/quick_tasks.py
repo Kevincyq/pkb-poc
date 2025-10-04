@@ -25,16 +25,47 @@ def quick_classify_content(content_id: str):
     try:
         logger.info(f"Starting quick classification for content: {content_id}")
         
+        # 🔥 修复：检查解析状态，如果还在解析中则延迟执行
+        from app.models import Content
+        content = db.query(Content).filter(Content.id == content_id).first()
+        if content and content.meta:
+            parsing_status = content.meta.get("parsing_status", "pending")
+            if parsing_status == "parsing":
+                logger.warning(f"⏰ Content {content_id} still parsing, retrying in 2 seconds")
+                # 延迟重试
+                quick_classify_content.apply_async(
+                    args=[content_id],
+                    queue="quick",
+                    priority=9,
+                    countdown=2
+                )
+                return {"success": False, "error": "Still parsing, retrying"}
+            
+            # 更新状态为快速分类中
+            content.meta["classification_status"] = "quick_processing"
+            # 标记meta字段为已修改
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(content, 'meta')
+        db.commit()
+        
         # 初始化快速分类服务
         quick_service = QuickClassificationService(db)
         
         # 执行快速分类（后台执行，不更新show_classification状态）
         result = quick_service.quick_classify(content_id, update_display=False)
         
-        if result["success"]:
-            logger.info(f"Quick classified content {content_id} as {result.get('category_name', 'unknown')} (background only)")
-        else:
-            logger.error(f"Failed to quick classify content {content_id}: {result.get('error', 'unknown error')}")
+        # 更新分类状态
+        if content and content.meta:
+            if result["success"]:
+                content.meta["classification_status"] = "quick_done"
+                logger.info(f"✅ Quick classified content {content_id} as {result.get('category_name', 'unknown')}")
+            else:
+                content.meta["classification_status"] = "quick_error"
+                logger.error(f"❌ Failed to quick classify content {content_id}: {result.get('error', 'unknown error')}")
+            # 标记meta字段为已修改
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(content, 'meta')
+        db.commit()
         
         return result
         
@@ -89,6 +120,22 @@ def match_document_to_collections(content_id: str):
     db = SessionLocal()
     try:
         logger.info(f"Starting collection matching for content: {content_id}")
+        
+        # 🔥 修复：检查分类是否完成，如果还在分类中则延迟执行
+        from app.models import Content
+        content = db.query(Content).filter(Content.id == content_id).first()
+        if content and content.meta:
+            classification_status = content.meta.get("classification_status", "pending")
+            if classification_status in ["pending", "quick_processing", "ai_processing"]:
+                logger.warning(f"⏰ Content {content_id} still classifying (status: {classification_status}), retrying in 3 seconds")
+                # 延迟重试
+                match_document_to_collections.apply_async(
+                    args=[content_id],
+                    queue="quick",
+                    priority=7,
+                    countdown=3
+                )
+                return {"success": False, "error": "Still classifying, retrying"}
         
         # 初始化合集匹配服务
         matching_service = CollectionMatchingService(db)

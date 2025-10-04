@@ -234,11 +234,13 @@ class CollectionMatchingService:
                 else:
                     logger.info(f"❌ Document '{content.title}' did not match collection '{collection.name}'")
             
-            # 更新Content的分类状态（合集匹配完成）
+            # 🔥 修复：不要覆盖AI分类的状态，只标记合集匹配完成
             if content.meta is None:
                 content.meta = {}
             
-            content.meta["classification_status"] = "completed"
+            # 添加合集匹配完成标记，但不覆盖classification_status
+            content.meta["collection_matching_status"] = "completed"
+            content.meta["collection_matching_count"] = len(matched_collections)
             # 保持show_classification状态不变，由AI分类决定
             
             # 标记meta字段为已修改，确保SQLAlchemy保存更改

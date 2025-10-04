@@ -13,9 +13,13 @@ export interface UploadResponse {
 export interface ProcessingStatus {
   content_id: string;
   title: string;
-  processing_status: 'processing' | 'completed' | 'error';
-  classification_status: 'pending' | 'quick_done' | 'ai_done' | 'completed';
+  processing_status: 'uploaded' | 'parsing' | 'parsed' | 'processing' | 'completed' | 'error';
+  parsing_status: 'pending' | 'parsing' | 'completed' | 'error';
+  classification_status: 'pending' | 'quick_processing' | 'quick_done' | 'ai_processing' | 'completed' | 'error';
   show_classification: boolean;
+  file_type: string;
+  file_size: number;
+  estimated_time: number;
   categories: Array<{
     id: string;
     name: string;
@@ -25,13 +29,26 @@ export interface ProcessingStatus {
   created_at: string | null;
 }
 
-export const uploadFile = async (file: File): Promise<UploadResponse> => {
+export const uploadFile = async (
+  file: File, 
+  onProgress?: (progressEvent: { loaded: number; total: number; progress: number }) => void
+): Promise<UploadResponse> => {
   const formData = new FormData();
   formData.append('file', file);
 
   const response = await api.post<UploadResponse>('/ingest/upload', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
+    },
+    onUploadProgress: (progressEvent) => {
+      if (onProgress && progressEvent.total) {
+        const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        onProgress({
+          loaded: progressEvent.loaded,
+          total: progressEvent.total,
+          progress: progress
+        });
+      }
     },
   });
 

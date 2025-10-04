@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Row, Col, Button, message, Upload, Modal, Input, Drawer, Select, Slider, Tag } from 'antd';
-import { SearchOutlined, PlusOutlined, FileTextOutlined, FilterOutlined } from '@ant-design/icons';
+import { Row, Col, Button, message, Upload, Modal, Input, Drawer, Select, Slider, Tag, Progress, Tooltip } from 'antd';
+import { SearchOutlined, PlusOutlined, FileTextOutlined, FilterOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import MainLayout from '../../components/Layout/MainLayout';
@@ -38,7 +38,28 @@ export default function Home() {
   const [uploadFiles, setUploadFiles] = useState<UploadFileStatus[]>([]);
   const [uploadDrawerVisible, setUploadDrawerVisible] = useState(false);
   const [createCollectionModalVisible, setCreateCollectionModalVisible] = useState(false);
-  const [processingBatch, setProcessingBatch] = useState<string | null>(null); // 防止重复批量上传
+  
+  // 批次状态管理
+  interface BatchStats {
+    total: number;
+    completed: number;
+    failed: number;
+    processing: number;
+    overallProgress: number;
+  }
+  
+  const getBatchStats = (): BatchStats => {
+    const total = uploadFiles.length;
+    const completed = uploadFiles.filter(f => f.status === 'completed').length;
+    const failed = uploadFiles.filter(f => f.status === 'error').length;
+    const processing = uploadFiles.filter(f => ['uploading', 'parsing', 'classifying'].includes(f.status)).length;
+    
+    // 计算整体进度
+    const totalProgress = uploadFiles.reduce((sum, file) => sum + (file.progress || 0), 0);
+    const overallProgress = total > 0 ? Math.round(totalProgress / total) : 0;
+    
+    return { total, completed, failed, processing, overallProgress };
+  };
   
   // 搜索相关状态
   const [searchModalVisible, setSearchModalVisible] = useState(false);
@@ -285,37 +306,90 @@ export default function Home() {
     navigate(`/collection/${encodeURIComponent(categoryName)}`);
   };
 
-  // 处理多文件上传
-  const handleMultipleFileUpload = async (fileList: File[]): Promise<void> => {
-    console.log(`开始批量上传 ${fileList.length} 个文件`);
+  // 处理多文件上传 - 重构版本
+  const handleMultipleFileUpload = async (fileList: File[], batchId: string): Promise<void> => {
+    console.log(`🚀 开始批量上传 ${fileList.length} 个文件，批次ID: ${batchId}`);
     
-    // 显示上传抽屉
-    setUploadDrawerVisible(true);
+    // 智能并发控制：根据文件大小决定并发数
+    const getOptimalConcurrency = (files: File[]): number => {
+      const totalSize = files.reduce((sum, file) => sum + (file.size || 0), 0);
+      const avgSize = totalSize / files.length;
+      
+      // 根据平均文件大小调整并发数
+      if (avgSize < 1024 * 1024) {        // < 1MB: 高并发
+        return Math.min(5, files.length);
+      } else if (avgSize < 10 * 1024 * 1024) {  // 1-10MB: 中并发
+        return Math.min(3, files.length);
+      } else {                             // > 10MB: 低并发
+        return Math.min(2, files.length);
+      }
+    };
     
-    // 简化逻辑：直接并发上传所有文件，但限制并发数
-    const concurrentLimit = 3; // 降低并发数，避免服务器压力
+    const concurrentLimit = getOptimalConcurrency(fileList);
+    console.log(`📊 智能并发控制：${concurrentLimit} 个并发，平均文件大小: ${(fileList.reduce((sum, f) => sum + (f.size || 0), 0) / fileList.length / 1024 / 1024).toFixed(1)}MB`);
     
-    // 分批处理文件
+    let completedCount = 0;
+    let failedCount = 0;
+    
+    // 分批处理文件，确保稳定性
     for (let i = 0; i < fileList.length; i += concurrentLimit) {
       const batch = fileList.slice(i, i + concurrentLimit);
+      console.log(`📦 处理批次 ${Math.floor(i / concurrentLimit) + 1}/${Math.ceil(fileList.length / concurrentLimit)}: ${batch.length} 个文件`);
       
       // 并发处理当前批次
-      const batchPromises = batch.map(async (file) => {
+      const batchPromises = batch.map(async (file, index) => {
+        const globalIndex = i + index;
         try {
-          console.log(`开始上传文件: ${file.name}`);
+          console.log(`⬆️  [${globalIndex + 1}/${fileList.length}] 开始上传: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB)`);
           await handleFileUpload(file);
-          console.log(`文件上传完成: ${file.name}`);
+          completedCount++;
+          console.log(`✅ [${globalIndex + 1}/${fileList.length}] 上传完成: ${file.name}`);
         } catch (error) {
-          console.error(`文件 ${file.name} 上传失败:`, error);
+          failedCount++;
+          console.error(`❌ [${globalIndex + 1}/${fileList.length}] 上传失败: ${file.name}`, error);
+          
+          // 确保失败的文件也有状态显示
+          const fileId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          setUploadFiles(prev => {
+            // 检查是否已经存在这个文件的记录
+            const existingFile = prev.find(f => f.fileName === file.name && f.status === 'uploading');
+            if (!existingFile) {
+              // 如果不存在，添加一个失败状态的记录
+              const failedFileStatus: UploadFileStatus = {
+                id: fileId,
+                fileName: file.name,
+                fileSize: file.size,
+                status: 'error',
+                progress: 0,
+                errorMessage: error instanceof Error ? error.message : '上传失败',
+                startTime: Date.now()
+              };
+              return [...prev, failedFileStatus];
+            }
+            return prev;
+          });
         }
       });
       
-      // 等待当前批次完成再处理下一批次
+      // 等待当前批次完成
       await Promise.all(batchPromises);
-      console.log(`批次 ${Math.floor(i / concurrentLimit) + 1} 完成`);
+      
+      // 批次间短暂延迟，避免服务器压力过大
+      if (i + concurrentLimit < fileList.length) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
     }
     
-    console.log('所有文件上传完成');
+    console.log(`🎉 批量上传完成！成功: ${completedCount}, 失败: ${failedCount}, 总计: ${fileList.length}`);
+    
+    // 显示完成提示
+    if (failedCount === 0) {
+      message.success(`批量上传完成！成功上传 ${completedCount} 个文件`);
+    } else if (completedCount > 0) {
+      message.warning(`批量上传完成！成功 ${completedCount} 个，失败 ${failedCount} 个`);
+    } else {
+      message.error(`批量上传失败！${failedCount} 个文件上传失败`);
+    }
   };
 
   // 处理文件上传
@@ -338,8 +412,17 @@ export default function Home() {
     setUploadDrawerVisible(true);
     
     try {
-      // 使用统一的上传服务
-      const result = await uploadFile(file);
+      // 使用统一的上传服务，添加进度回调
+      const result = await uploadFile(file, (progressEvent) => {
+        // 实时更新上传进度
+        setUploadFiles(prev => prev.map(f => 
+          f.id === fileId ? { 
+            ...f, 
+            uploadProgress: progressEvent.progress,
+            progress: Math.min(progressEvent.progress * 0.3, 30) // 上传占总进度的30%
+          } : f
+        ));
+      });
 
       if (result.status === 'success') {
         // 更新状态为解析中
@@ -371,9 +454,32 @@ export default function Home() {
     }
   };
 
-  // 轮询处理状态
+  // 轮询处理状态 - 智能轮询版本
   const pollProcessingStatus = (contentId: string, fileId: string) => {
+    let pollCount = 0;
+    
+    // 获取文件信息以调整轮询策略
+    const fileInfo = uploadFiles.find(f => f.id === fileId);
+    const isImage = fileInfo?.fileName.match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i);
+    const isLargeFile = (fileInfo?.fileSize || 0) > 10 * 1024 * 1024; // 10MB
+    
+    // 智能轮询参数
+    const getPollingConfig = () => {
+      if (isImage) {
+        return { maxPolls: 20, interval: 1000 }; // 图片：20秒，1秒间隔
+      } else if (isLargeFile) {
+        return { maxPolls: 60, interval: 2000 }; // 大文件：2分钟，2秒间隔
+      } else {
+        return { maxPolls: 40, interval: 1500 }; // 普通文件：1分钟，1.5秒间隔
+      }
+    };
+    
+    const { maxPolls, interval } = getPollingConfig();
+    console.log(`🔄 Starting smart polling for ${fileId}: maxPolls=${maxPolls}, interval=${interval}ms, isImage=${isImage}, isLarge=${isLargeFile}`);
+    
     const pollInterval = setInterval(async () => {
+      pollCount++;
+      
       try {
         // 使用统一的状态查询服务
         const statusData = await getProcessingStatus(contentId);
@@ -381,13 +487,15 @@ export default function Home() {
         // 更新文件状态
         setUploadFiles(prev => prev.map(f => {
           if (f.id === fileId) {
-            console.log(`🔄 Updating file status for ${fileId}:`, {
+            console.log(`🔄 [${pollCount}/${maxPolls}] Updating file status for ${fileId}:`, {
+              processing_status: statusData.processing_status,
+              parsing_status: (statusData as any).parsing_status,
               classification_status: statusData.classification_status,
               show_classification: statusData.show_classification,
-              categories: statusData.categories
+              categories_count: statusData.categories?.length || 0
             });
             
-            // 根据classification_status和show_classification来判断状态
+            // 智能状态判断逻辑
             if (statusData.classification_status === 'completed' && statusData.show_classification) {
               // 分类完成，显示结果
               const categories = statusData.categories?.map((cat: any) => ({
@@ -402,7 +510,7 @@ export default function Home() {
                 is_system: cat.source === 'ml' || cat.source === 'heuristic'
               })) || [];
               
-              console.log(`✅ File ${fileId} classification completed with categories:`, categories);
+              console.log(`✅ File ${fileId} classification completed with ${categories.length} categories`);
               
               return {
                 ...f,
@@ -410,22 +518,37 @@ export default function Home() {
                 progress: 100,
                 categories
               };
-            } else if (statusData.classification_status === 'pending' || !statusData.show_classification) {
-              // 分类中
-              const progress = statusData.classification_status === 'quick_done' ? 50 : 
-                              statusData.classification_status === 'ai_done' ? 80 : 30;
+            } else {
+              // 根据详细状态显示进度和状态
+              let progress = 30;
+              let status: 'uploading' | 'parsing' | 'classifying' = 'parsing';
               
-              console.log(`⏳ File ${fileId} still classifying, progress: ${progress}%`);
+              // 根据解析状态
+              const parsingStatus = (statusData as any).parsing_status;
+              if (parsingStatus === 'parsing') {
+                progress = 35;
+                status = 'parsing';
+              } else if (parsingStatus === 'completed') {
+                progress = 50;
+                status = 'classifying';
+                
+                // 根据分类状态细化进度
+                if ((statusData.classification_status as any) === 'quick_processing') {
+                  progress = 60;
+                } else if (statusData.classification_status === 'quick_done') {
+                  progress = 70;
+                } else if ((statusData.classification_status as any) === 'ai_processing') {
+                  progress = 85;
+                }
+              }
+              
+              console.log(`⏳ File ${fileId} processing: parsing=${parsingStatus}, classification=${statusData.classification_status}, progress=${progress}%`);
               
               return {
                 ...f,
-                status: 'classifying',
+                status,
                 progress
               };
-            } else {
-              // 其他状态，保持当前状态
-              console.log(`🤔 File ${fileId} unknown status, keeping current state`);
-              return f;
             }
           }
           return f;
@@ -438,11 +561,29 @@ export default function Home() {
           
           // 刷新页面数据
           loadCategories();
-        } else {
-          console.log(`🔄 Continuing polling for ${fileId} - status: ${statusData.classification_status}, show: ${statusData.show_classification}`);
+        } else if (pollCount >= maxPolls) {
+          // 达到最大轮询次数，但不标记为失败
+          console.log(`⏰ Polling timeout for ${fileId}, but file may still be processing`);
+          clearInterval(pollInterval);
+          
+          setUploadFiles(prev => prev.map(f => 
+            f.id === fileId && f.status !== 'completed' ? { 
+              ...f, 
+              status: 'classifying',
+              progress: 95,
+              errorMessage: '处理中，请稍候或刷新页面查看结果' 
+            } : f
+          ));
         }
       } catch (error) {
-        console.error('Status polling error:', error);
+        console.error(`❌ Status polling error for ${fileId}:`, error);
+        
+        // 网络错误不立即停止轮询，给几次重试机会
+        if (pollCount < 5) {
+          console.log(`🔄 Retrying status check for ${fileId} (attempt ${pollCount})`);
+          return; // 继续轮询
+        }
+        
         clearInterval(pollInterval);
         
         // 更新为错误状态
@@ -450,25 +591,119 @@ export default function Home() {
           f.id === fileId ? { 
             ...f, 
             status: 'error', 
-            errorMessage: '状态查询失败' 
+            errorMessage: '状态查询失败，请刷新页面查看结果' 
           } : f
         ));
       }
-    }, 1500); // 每1.5秒轮询一次，减少服务器压力
+    }, interval); // 使用智能间隔
+  };
 
-    // 20秒后停止轮询（减少无效轮询）
-    setTimeout(() => {
-      clearInterval(pollInterval);
+  // 重试文件上传/处理
+  const handleRetryFile = async (fileId: string) => {
+    const fileToRetry = uploadFiles.find(f => f.id === fileId);
+    if (!fileToRetry) {
+      message.error('找不到要重试的文件');
+      return;
+    }
+
+    console.log(`🔄 Retrying file: ${fileToRetry.fileName}`);
+
+    // 检查错误类型，决定重试策略
+    const errorMessage = fileToRetry.errorMessage || '';
+    
+    if (errorMessage.includes('网络') || errorMessage.includes('连接') || errorMessage.includes('超时')) {
+      // 网络错误：重新上传
+      message.info(`正在重新上传文件: ${fileToRetry.fileName}`);
       
-      // 如果还没完成，标记为超时
+      // 重置文件状态
       setUploadFiles(prev => prev.map(f => 
-        f.id === fileId && f.status === 'classifying' ? { 
-          ...f, 
-          status: 'error', 
-          errorMessage: '分类超时，请刷新页面查看结果' 
+        f.id === fileId ? {
+          ...f,
+          status: 'uploading',
+          progress: 0,
+          uploadProgress: 0,
+          errorMessage: undefined,
+          startTime: Date.now()
         } : f
       ));
-    }, 20000);
+
+      // 需要重新获取File对象，这里暂时提示用户重新选择
+      message.warning('网络错误导致的失败需要重新选择文件上传');
+      
+    } else if (errorMessage.includes('状态查询') || errorMessage.includes('处理中')) {
+      // 状态查询错误：重新轮询
+      message.info(`正在重新检查文件状态: ${fileToRetry.fileName}`);
+      
+      if (fileToRetry.contentId) {
+        // 重置状态并重新开始轮询
+        setUploadFiles(prev => prev.map(f => 
+          f.id === fileId ? {
+            ...f,
+            status: 'classifying',
+            progress: 30,
+            errorMessage: undefined
+          } : f
+        ));
+        
+        // 重新开始轮询
+        pollProcessingStatus(fileToRetry.contentId, fileId);
+      } else {
+        message.error('缺少内容ID，无法重新检查状态');
+      }
+      
+    } else {
+      // 其他错误：提示用户重新上传
+      message.warning('该文件处理失败，建议重新选择文件上传');
+    }
+  };
+
+  // 批量重试失败文件
+  const handleBatchRetry = () => {
+    const failedFiles = uploadFiles.filter(f => f.status === 'error');
+    
+    if (failedFiles.length === 0) {
+      message.info('没有失败的文件需要重试');
+      return;
+    }
+
+    console.log(`🔄 Batch retrying ${failedFiles.length} failed files`);
+    
+    // 分类错误类型
+    const networkErrors = failedFiles.filter(f => 
+      (f.errorMessage || '').includes('网络') || 
+      (f.errorMessage || '').includes('连接') ||
+      (f.errorMessage || '').includes('超时')
+    );
+    
+    const statusErrors = failedFiles.filter(f => 
+      (f.errorMessage || '').includes('状态查询') || 
+      (f.errorMessage || '').includes('处理中')
+    );
+
+    // 重试状态查询错误
+    if (statusErrors.length > 0) {
+      message.info(`正在重新检查 ${statusErrors.length} 个文件的状态`);
+      
+      statusErrors.forEach(file => {
+        if (file.contentId) {
+          setUploadFiles(prev => prev.map(f => 
+            f.id === file.id ? {
+              ...f,
+              status: 'classifying',
+              progress: 30,
+              errorMessage: undefined
+            } : f
+          ));
+          
+          pollProcessingStatus(file.contentId, file.id);
+        }
+      });
+    }
+
+    // 网络错误需要重新上传
+    if (networkErrors.length > 0) {
+      message.warning(`${networkErrors.length} 个文件因网络错误失败，需要重新选择文件上传`);
+    }
   };
 
   const uploadProps: UploadProps = {
@@ -476,31 +711,59 @@ export default function Home() {
     multiple: true,  // 启用多文件选择
     showUploadList: false,
     beforeUpload: (file, fileList) => {
-      // 处理多文件上传
+      // 关键修复：只在处理第一个文件时触发批次处理
+      const isFirstFile = fileList && fileList.indexOf(file) === 0;
+      
       if (fileList && fileList.length > 1) {
-        // 生成批次ID，防止重复处理
-        const batchId = fileList.map(f => f.name).sort().join('|');
-        
-        // 检查是否已经在处理这个批次
-        if (processingBatch !== batchId) {
-          setProcessingBatch(batchId);
-          console.log(`开始处理批次: ${batchId}, 文件数量: ${fileList.length}`);
+        // 🔥 MVP限制：更保守的文件限制
+        if (isFirstFile) {
+          // 验证文件数量（MVP：最多5个文件）
+          if (fileList.length > 5) {
+            message.error(`MVP阶段一次最多只能上传5个文件，当前选择了${fileList.length}个文件`);
+            return false;
+          }
           
-          // 批量处理多个文件
-          handleMultipleFileUpload(fileList).finally(() => {
-            // 处理完成后清除批次标记
-            setTimeout(() => setProcessingBatch(null), 1000);
-          });
-        } else {
-          console.log(`批次 ${batchId} 已在处理中，跳过重复调用`);
+          // 验证单个文件大小（MVP：每个文件最大20MB）
+          const maxSingleSize = 20 * 1024 * 1024; // 20MB
+          const oversizedFiles = fileList.filter(f => (f.size || 0) > maxSingleSize);
+          if (oversizedFiles.length > 0) {
+            message.error(`MVP阶段单个文件不能超过20MB，以下文件超限：${oversizedFiles.map(f => `${f.name}(${(f.size / 1024 / 1024).toFixed(1)}MB)`).join(', ')}`);
+            return false;
+          }
+          
+          // 验证总文件大小（保守估计：5个文件×20MB = 100MB）
+          const totalSize = fileList.reduce((sum, f) => sum + (f.size || 0), 0);
+          const maxTotalSize = 100 * 1024 * 1024; // 100MB
+          if (totalSize > maxTotalSize) {
+            message.error(`批量上传总大小不能超过100MB，当前：${(totalSize / 1024 / 1024).toFixed(1)}MB`);
+            return false;
+          }
+          
+          const batchId = `batch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          console.log(`开始批次上传: ${batchId}, 文件数量: ${fileList.length}, 总大小: ${(totalSize / 1024 / 1024).toFixed(1)}MB`);
+          
+          // 显示上传抽屉
+          setUploadDrawerVisible(true);
+          
+          // 立即处理整个批次
+          handleMultipleFileUpload(fileList, batchId);
         }
+        // 其他文件直接返回false，不做处理
       } else {
+        // 🔥 MVP限制：单文件上传验证
+        const maxSingleSize = 20 * 1024 * 1024; // 20MB
+        if ((file.size || 0) > maxSingleSize) {
+          message.error(`MVP阶段单个文件不能超过20MB，当前文件 ${file.name} 大小为 ${(file.size / 1024 / 1024).toFixed(1)}MB`);
+          return false;
+        }
+        
         // 单文件处理
+        console.log(`开始单文件上传: ${file.name}`);
         handleFileUpload(file);
       }
       return false; // 阻止默认上传行为
     },
-    accept: '.txt,.md,.pdf,.jpg,.jpeg,.png,.gif,.bmp,.webp,.doc,.docx,.ppt,.pptx,.xls,.xlsx',
+    accept: '.txt,.md,.pdf,.jpg,.jpeg,.png,.gif,.bmp,.webp',  // ⚠️ Office文档暂不支持
   };
 
   // 对合集进行排序
@@ -591,6 +854,35 @@ export default function Home() {
               }}
             />
           </Upload>
+          <Tooltip 
+            title={
+              <div style={{ fontSize: '12px', lineHeight: '1.4' }}>
+                <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#1890ff' }}>📁 文件上传限制 (MVP版本)</div>
+                <div style={{ marginBottom: '2px' }}>✅ 支持格式：.txt, .md, .pdf</div>
+                <div style={{ marginBottom: '2px' }}>✅ 支持图片：.jpg, .jpeg, .png, .gif, .bmp, .webp</div>
+                <div style={{ marginBottom: '2px' }}>❌ 暂不支持：Office文档(.doc, .xls, .ppt等)</div>
+                <div style={{ marginBottom: '2px' }}>📏 单文件大小：≤ 20MB</div>
+                <div style={{ marginBottom: '2px' }}>📦 批量上传：≤ 5个文件</div>
+                <div style={{ color: '#52c41a' }}>💡 小文件处理更快，体验更佳</div>
+              </div>
+            }
+            placement="bottomRight"
+            overlayStyle={{ maxWidth: '280px' }}
+          >
+            <Button
+              type="text"
+              icon={<InfoCircleOutlined style={{ fontSize: '16px', color: '#1890ff' }} />}
+              style={{
+                width: '24px',
+                height: '24px',
+                padding: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginLeft: '4px'
+              }}
+            />
+          </Tooltip>
         </div>
       </div>
 
@@ -693,17 +985,25 @@ export default function Home() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <FileTextOutlined />
             <span>文件上传状态</span>
-            {uploadFiles.filter(f => f.status !== 'completed').length > 0 && (
-              <span style={{ 
-                fontSize: 12, 
-                color: '#666',
-                backgroundColor: '#f0f0f0',
-                padding: '2px 6px',
-                borderRadius: 10
-              }}>
-                {uploadFiles.filter(f => f.status !== 'completed').length} 个处理中
-              </span>
-            )}
+            {(() => {
+              const stats = getBatchStats();
+              if (stats.total > 0) {
+                return (
+                  <span style={{ 
+                    fontSize: 12, 
+                    color: '#666',
+                    backgroundColor: '#f0f0f0',
+                    padding: '2px 6px',
+                    borderRadius: 10
+                  }}>
+                    {stats.processing > 0 ? `${stats.processing} 个处理中` : 
+                     stats.failed > 0 ? `${stats.completed}/${stats.total} 完成，${stats.failed} 失败` :
+                     `${stats.completed}/${stats.total} 完成`}
+                  </span>
+                );
+              }
+              return null;
+            })()}
           </div>
         )}
         placement="right"
@@ -712,17 +1012,32 @@ export default function Home() {
         onClose={() => setUploadDrawerVisible(false)}
         extra={
           uploadFiles.length > 0 && (
-            <Button 
-              size="small" 
-              onClick={() => {
-                setUploadFiles(prev => prev.filter(f => f.status !== 'completed'));
-                if (uploadFiles.filter(f => f.status !== 'completed').length === 0) {
-                  setUploadDrawerVisible(false);
-                }
-              }}
-            >
-              清除已完成
-            </Button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {(() => {
+                const stats = getBatchStats();
+                const hasFailedFiles = stats.failed > 0;
+                return hasFailedFiles ? (
+                  <Button 
+                    size="small" 
+                    type="primary"
+                    onClick={handleBatchRetry}
+                  >
+                    重试失败
+                  </Button>
+                ) : null;
+              })()}
+              <Button 
+                size="small" 
+                onClick={() => {
+                  setUploadFiles(prev => prev.filter(f => f.status !== 'completed'));
+                  if (uploadFiles.filter(f => f.status !== 'completed').length === 0) {
+                    setUploadDrawerVisible(false);
+                  }
+                }}
+              >
+                清除已完成
+              </Button>
+            </div>
           )
         }
       >
@@ -736,6 +1051,56 @@ export default function Home() {
           </div>
         ) : (
           <div>
+            {/* 批次整体进度 */}
+            {(() => {
+              const stats = getBatchStats();
+              if (stats.total > 1) {
+                return (
+                  <div style={{ 
+                    marginBottom: 16, 
+                    padding: 12, 
+                    backgroundColor: '#f8f9fa', 
+                    borderRadius: 8,
+                    border: '1px solid #e9ecef'
+                  }}>
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center',
+                      marginBottom: 8
+                    }}>
+                      <span style={{ fontWeight: 'bold', fontSize: 14 }}>
+                        批量上传进度
+                      </span>
+                      <span style={{ fontSize: 12, color: '#666' }}>
+                        {stats.completed + stats.failed}/{stats.total} 个文件
+                      </span>
+                    </div>
+                    <Progress
+                      percent={stats.overallProgress}
+                      size="small"
+                      status={stats.failed > 0 ? 'exception' : stats.processing > 0 ? 'active' : 'success'}
+                      showInfo={true}
+                      format={(percent) => `${percent}%`}
+                    />
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between',
+                      fontSize: 12,
+                      color: '#666',
+                      marginTop: 4
+                    }}>
+                      <span>✅ 成功: {stats.completed}</span>
+                      {stats.processing > 0 && <span>⏳ 处理中: {stats.processing}</span>}
+                      {stats.failed > 0 && <span style={{ color: '#ff4d4f' }}>❌ 失败: {stats.failed}</span>}
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+            
+            {/* 单个文件状态列表 */}
             {uploadFiles.map(file => (
               <UploadStatusCard
                 key={file.id}
@@ -749,8 +1114,7 @@ export default function Home() {
                   navigate(`/collection/${encodeURIComponent(categoryName)}`);
                 }}
                 onRetry={(fileId) => {
-                  // TODO: 实现重试逻辑
-                  console.log('Retry file:', fileId);
+                  handleRetryFile(fileId);
                 }}
                 onRemove={(fileId) => {
                   setUploadFiles(prev => prev.filter(f => f.id !== fileId));

@@ -39,6 +39,140 @@ def simple_chunk(text: str, max_len: int = 700):
     
     return [c.strip() for c in chunks if c.strip()]
 
+# 新增：文件解析和分块任务
+@celery_app.task(name="app.workers.tasks.parse_and_chunk_file", queue="quick")
+def parse_and_chunk_file(content_id: str, file_path: str):
+    """
+    异步解析文件内容并进行分块
+    
+    Args:
+        content_id: 内容ID
+        file_path: 文件路径
+    """
+    db = SessionLocal()
+    try:
+        logger.info(f"🔍 Starting file parsing for content {content_id}: {file_path}")
+        
+        # 获取内容记录
+        content = db.query(Content).filter(Content.id == content_id).first()
+        if not content:
+            logger.error(f"Content {content_id} not found")
+            return {"status": "error", "message": "Content not found"}
+        
+        # 更新状态为解析中
+        if content.meta:
+            content.meta["parsing_status"] = "parsing"
+            content.meta["processing_status"] = "parsing"
+            # 标记meta字段为已修改
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(content, 'meta')
+        db.commit()
+        
+        # 解析文件内容
+        processor = DocumentProcessor()
+        try:
+            parsed_result = processor.process_file(file_path)
+            file_text = parsed_result.get("text", "")
+            file_metadata = parsed_result.get("metadata", {})
+            
+            logger.info(f"📄 Parsed file {content_id}: {len(file_text)} chars, metadata: {list(file_metadata.keys())}")
+            
+        except Exception as e:
+            logger.error(f"Failed to parse file {content_id}: {e}")
+            file_text = ""
+            file_metadata = {"parse_error": str(e)}
+        
+        # 更新内容记录
+        content.text = file_text
+        if content.meta:
+            content.meta.update(file_metadata)
+            content.meta["parsing_status"] = "completed"
+            content.meta["processing_status"] = "parsed"
+            # 标记meta字段为已修改
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(content, 'meta')
+        
+        # 进行文本分块
+        chunk_ids = []
+        if file_text:
+            seq = 0
+            for chunk_text in simple_chunk(file_text):
+                chunk = Chunk(
+                    content_id=content.id,
+                    seq=seq,
+                    text=chunk_text,
+                    meta={"source_uri": content.source_uri}
+                )
+                db.add(chunk)
+                seq += 1
+            
+            db.commit()
+            db.refresh(content)
+            chunk_ids = [str(chunk.id) for chunk in content.chunks]
+            
+            logger.info(f"📝 Created {len(chunk_ids)} chunks for content {content_id}")
+            
+            # 立即调度向量生成任务
+            generate_embeddings.apply_async(
+                args=[chunk_ids],
+                queue="heavy",
+                priority=8,
+                countdown=0.5
+            )
+        
+        db.commit()
+        
+        return {
+            "status": "success",
+            "content_id": content_id,
+            "chunks_created": len(chunk_ids),
+            "text_length": len(file_text),
+            "message": "文件解析完成"
+        }
+        
+    except Exception as e:
+        logger.error(f"Parse and chunk task failed for {content_id}: {e}")
+        
+        # 更新错误状态
+        try:
+            content = db.query(Content).filter(Content.id == content_id).first()
+            if content and content.meta:
+                content.meta["parsing_status"] = "error"
+                content.meta["processing_status"] = "error"
+                content.meta["parse_error"] = str(e)
+            db.commit()
+        except Exception as db_e:
+            logger.error(f"Failed to update error status: {db_e}")
+        
+        return {"status": "error", "message": str(e)}
+    finally:
+        db.close()
+
+# 新增：图片缩略图生成任务
+@celery_app.task(name="app.workers.tasks.generate_image_thumbnail", queue="heavy")
+def generate_image_thumbnail(content_id: str, file_path: str):
+    """
+    异步生成图片缩略图
+    
+    Args:
+        content_id: 内容ID
+        file_path: 图片文件路径
+    """
+    try:
+        logger.info(f"🖼️  Generating thumbnail for content {content_id}: {file_path}")
+        
+        from app.api.files import pregenerate_thumbnail_if_image
+        if pregenerate_thumbnail_if_image(Path(file_path)):
+            logger.info(f"✅ Thumbnail generated for content {content_id}")
+            return {"status": "success", "message": "Thumbnail generated"}
+        else:
+            logger.warning(f"⚠️  No thumbnail generated for content {content_id}")
+            return {"status": "skipped", "message": "Not an image or thumbnail exists"}
+            
+    except Exception as e:
+        logger.error(f"❌ Thumbnail generation failed for {content_id}: {e}")
+        return {"status": "error", "message": str(e)}
+
 # 入口任务：处理文件摄取
 @celery_app.task(name="app.workers.tasks.ingest_file", queue="ingest")
 def ingest_file(path: str):
@@ -237,6 +371,28 @@ def classify_content(content_id: str):
     try:
         logger.info(f"Starting classification for content: {content_id}")
         
+        # 🔥 修复：检查解析状态，如果还在解析中则延迟执行
+        content = db.query(Content).filter(Content.id == content_id).first()
+        if content and content.meta:
+            parsing_status = content.meta.get("parsing_status", "pending")
+            if parsing_status == "parsing":
+                logger.warning(f"⏰ Content {content_id} still parsing, retrying in 3 seconds")
+                # 延迟重试
+                classify_content.apply_async(
+                    args=[content_id],
+                    queue="classify",
+                    priority=8,
+                    countdown=3
+                )
+                return {"success": False, "error": "Still parsing, retrying"}
+            
+            # 更新状态为AI分类中
+            content.meta["classification_status"] = "ai_processing"
+            # 标记meta字段为已修改
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(content, 'meta')
+        db.commit()
+        
         # 初始化分类服务
         category_service = CategoryService(db)
         
@@ -246,10 +402,21 @@ def classify_content(content_id: str):
         # 执行分类
         result = category_service.classify_content(content_id)
         
-        if result["success"]:
-            logger.info(f"Successfully classified content {content_id} as {result.get('category_name', 'unknown')}")
-        else:
-            logger.error(f"Failed to classify content {content_id}: {result.get('error', 'unknown error')}")
+        # 🔥 关键修复：无论成功失败，都设置show_classification = True
+        if content and content.meta:
+            if result["success"]:
+                content.meta["classification_status"] = "completed"
+                content.meta["show_classification"] = True  # 允许前端显示结果
+                logger.info(f"✅ Successfully classified content {content_id} as {result.get('category_name', 'unknown')}")
+            else:
+                content.meta["classification_status"] = "error"
+                content.meta["show_classification"] = True  # 即使失败也显示状态
+                content.meta["classification_error"] = result.get('error', 'unknown error')
+                logger.error(f"❌ Failed to classify content {content_id}: {result.get('error', 'unknown error')}")
+            # 标记meta字段为已修改
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(content, 'meta')
+        db.commit()
         
         return result
         
