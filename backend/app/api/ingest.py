@@ -424,6 +424,7 @@ async def _process_single_file(file: UploadFile, db: Session):
         }
         
         log.info(f"📁 File uploaded: {file.filename} ({file_size/1024/1024:.1f}MB, {'image' if is_image else 'document'})")
+        log.debug(f"🔍 File details: extension={file_extension}, is_image={is_image}, is_large={is_large_file}")
         
         # 4. 立即创建Content记录（上传完成，等待解析）
         content_record = Content(

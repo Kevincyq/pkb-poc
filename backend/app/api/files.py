@@ -12,12 +12,27 @@ from PIL import Image
 import io
 import hashlib
 import time
+import urllib.parse
 from sqlalchemy.orm import Session
 from app.db import SessionLocal
 from app.models import Content, Chunk, ContentCategory
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+def encode_filename_for_header(filename: str) -> str:
+    """
+    为HTTP头正确编码文件名，支持中文字符
+    使用RFC 5987标准: filename*=UTF-8''encoded_filename
+    """
+    try:
+        # 尝试ASCII编码（对于纯英文文件名）
+        filename.encode('ascii')
+        return f'filename="{filename}"'
+    except UnicodeEncodeError:
+        # 对于包含非ASCII字符的文件名，使用RFC 5987编码
+        encoded_filename = urllib.parse.quote(filename, safe='')
+        return f'filename*=UTF-8\'\'{encoded_filename}'
 
 def get_db():
     db = SessionLocal()
@@ -333,9 +348,9 @@ async def get_file(filename: str, db: Session = Depends(get_db)):
     获取原始文件（用于预览和下载）
     """
     try:
-        logger.info(f"Requesting file: {filename}")
+        logger.debug(f"🔍 Requesting file: {filename}")
         file_path = get_file_path(filename, db)
-        logger.info(f"Found file path: {file_path}")
+        logger.debug(f"📁 Resolved file path: {file_path}")
         
         if not file_path.exists():
             logger.error(f"File does not exist: {file_path}")
@@ -360,13 +375,18 @@ async def get_file(filename: str, db: Session = Depends(get_db)):
         
         media_type = media_type_map.get(file_extension, 'application/octet-stream')
         
+        # 🔥 修复中文文件名编码问题
+        content_disposition = f'inline; {encode_filename_for_header(filename)}'
+        logger.debug(f"📝 Content-Disposition: {content_disposition}")
+        logger.debug(f"🎯 Media type: {media_type}")
+        
         return FileResponse(
             path=str(file_path),
             media_type=media_type,
             filename=filename,
             headers={
                 "Cache-Control": "public, max-age=3600",
-                "Content-Disposition": f'inline; filename="{filename}"'  # inline表示浏览器内预览
+                "Content-Disposition": content_disposition
             }
         )
         

@@ -5,6 +5,25 @@ from fastapi.responses import RedirectResponse
 from app.db import engine, Base
 from app.models import Content, Chunk, QAHistory, AgentTask, MCPTool, OpsLog, Category, ContentCategory, Collection
 from starlette.middleware.base import BaseHTTPMiddleware
+import logging
+import os
+
+# 🔥 配置Debug日志级别
+log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, log_level),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+# 设置特定模块的日志级别
+logging.getLogger("app.api.files").setLevel(logging.DEBUG)
+logging.getLogger("app.api.ingest").setLevel(logging.DEBUG)
+logging.getLogger("app.workers.tasks").setLevel(logging.DEBUG)
+logging.getLogger("app.workers.quick_tasks").setLevel(logging.DEBUG)
+
+logger = logging.getLogger(__name__)
+logger.info(f"🚀 PKB Backend starting with log level: {log_level}")
 
 # 创建数据库表结构
 Base.metadata.create_all(bind=engine)
