@@ -8,6 +8,7 @@ import CollectionCard from '../../components/Collection/CollectionCard';
 import AIInput from '../../components/AIInput/AIInput';
 import UploadStatusCard, { type UploadFileStatus } from '../../components/Upload/UploadStatusCard';
 import CreateCollectionModal from '../../components/Collection/CreateCollectionModal';
+import SearchOverlay from '../../components/SearchOverlay';
 import type { UploadProps } from 'antd';
 import * as collectionService from '../../services/collectionManageService';
 import { uploadFile, getProcessingStatus } from '../../services/uploadService';
@@ -41,6 +42,7 @@ export default function Home() {
   
   // 搜索相关状态
   const [searchModalVisible, setSearchModalVisible] = useState(false);
+  const [searchOverlayVisible, setSearchOverlayVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -109,7 +111,7 @@ export default function Home() {
   const loadCategories = loadData;
 
   const handleSearch = () => {
-    setSearchModalVisible(true);
+    setSearchOverlayVisible(true);
   };
 
   const performSearch = async () => {
@@ -932,6 +934,12 @@ export default function Home() {
         open={createCollectionModalVisible}
         onCancel={() => setCreateCollectionModalVisible(false)}
         onSuccess={handleCreateCollectionSuccess}
+      />
+
+      {/* 搜索覆盖层 */}
+      <SearchOverlay
+        visible={searchOverlayVisible}
+        onClose={() => setSearchOverlayVisible(false)}
       />
     </MainLayout>
   );
