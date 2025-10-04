@@ -1,12 +1,30 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from app.api import ingest, search, operator, qa, agent, document, embedding, category, collection, files
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from app.db import engine, Base
 from app.models import Content, Chunk, QAHistory, AgentTask, MCPTool, OpsLog, Category, ContentCategory, Collection
+from starlette.middleware.base import BaseHTTPMiddleware
 
 # 创建数据库表结构
 Base.metadata.create_all(bind=engine)
+
+class ProxyHeadersMiddleware(BaseHTTPMiddleware):
+    """处理代理头的中间件，确保FastAPI正确识别HTTPS协议"""
+    async def dispatch(self, request: Request, call_next):
+        # 检查代理头，修正协议信息
+        if "x-forwarded-proto" in request.headers:
+            forwarded_proto = request.headers["x-forwarded-proto"]
+            if forwarded_proto == "https":
+                # 确保FastAPI知道这是HTTPS请求
+                request.scope["scheme"] = "https"
+        
+        # 处理X-Forwarded-Ssl头
+        if "x-forwarded-ssl" in request.headers and request.headers["x-forwarded-ssl"] == "on":
+            request.scope["scheme"] = "https"
+            
+        response = await call_next(request)
+        return response
 
 app = FastAPI(
         title="PKB-backend",
@@ -15,6 +33,9 @@ app = FastAPI(
         openapi_url="/api/openapi.json",
         redoc_url=None
         )
+
+# 添加代理头处理中间件（必须在CORS之前）
+app.add_middleware(ProxyHeadersMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -26,9 +47,15 @@ app.add_middleware(
         "https://pkb-poc.kmchat.cloud",
         "https://pkb-frontend.vercel.app",
         "https://test-pkb.kmchat.cloud",
+        # Vercel预览和生产域名
+        "https://pkb-poc-git-feature-search-enhance-kevincyqs-projects.vercel.app",
+        "https://pkb-poc-kevincyqs-projects.vercel.app",
+        "https://pkb-poc.vercel.app",
+        # 允许所有Vercel子域名（开发时使用）
+        "*"
     ],
-    allow_credentials=True,  # 恢复为True，支持认证
-    allow_methods=["*"],
+    allow_credentials=False,  # 改为False，避免CORS问题
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
 )

@@ -12,6 +12,15 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+@router.get("/health")
+async def search_health():
+    """搜索服务健康检查"""
+    return {
+        "status": "ok",
+        "service": "search",
+        "timestamp": "2024-10-04T03:00:00Z"
+    }
+
 def get_db():
     db = SessionLocal()
     try: 
@@ -59,9 +68,14 @@ async def search(
         filters["confidence_max"] = confidence_max
     
     try:
+        # 添加调试日志
+        logger.info(f"Search request received: query={query}, top_k={top_k}, search_type={search_type}")
+        logger.info(f"Filters: {filters}")
+        
         # URL解码查询参数
         decoded_query = unquote(query) if query else ""
         if not decoded_query:
+            logger.warning("Empty query received")
             return {
                 "query": "",
                 "results": [],
@@ -72,9 +86,14 @@ async def search(
                 "error": "Query parameter is required"
             }
 
+        logger.info(f"Decoded query: {decoded_query}")
+        
         # 使用搜索服务
         search_service = SearchService(db)
+        logger.info("SearchService created successfully")
+        
         results = search_service.search(decoded_query, top_k, search_type, filters)
+        logger.info(f"Search completed, results count: {len(results.get('results', []))}")
         
         # 确保返回有效的JSON
         if not isinstance(results, dict):
