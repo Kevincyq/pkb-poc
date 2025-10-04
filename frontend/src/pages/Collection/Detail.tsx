@@ -171,7 +171,18 @@ export default function CollectionDetail() {
             {previewDocument.modality === 'image' ? (
               <div>
                 <img
-                  src={`//pkb.kmchat.cloud/api/files/thumbnail/${encodeURIComponent(previewDocument.title)}`}
+                  src={(() => {
+                    // 获取API基础URL
+                    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 
+                      (window.location.hostname === 'localhost' 
+                        ? 'http://localhost:8003/api' 
+                        : 'https://pkb-test.kmchat.cloud/api'
+                      );
+                    // 从source_uri提取文件名
+                    const fileName = previewDocument.source_uri.replace(/^(webui|nextcloud):\/\//, '');
+                    // 使用原始文件API（而非缩略图）获取高清图片
+                    return `${apiBaseUrl}/files/${encodeURIComponent(fileName)}`;
+                  })()}
                   alt={previewDocument.title}
                   style={{
                     maxWidth: '100%',
@@ -182,7 +193,7 @@ export default function CollectionDetail() {
                     boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
                   }}
                   onError={(e) => {
-                    // 如果缩略图加载失败，显示占位符
+                    // 如果原始图片加载失败，显示占位符
                     const target = e.target as HTMLImageElement;
                     target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2Y1ZjVmNSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj7ml6Dms5Xmn6XnnIvlm77niYc8L3RleHQ+PC9zdmc+';
                   }}

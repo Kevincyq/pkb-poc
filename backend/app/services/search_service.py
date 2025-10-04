@@ -621,14 +621,14 @@ class SearchService:
                     "category_identifier": category_identifier
                 }
             
-            # 构建查询
+            # 构建查询 - 直接使用Content表，避免Chunk导致重复
             base_query = self.db.query(
-                Chunk, Content, Category.name.label('category_name'),
+                Content, Category.name.label('category_name'),
                 Category.color.label('category_color'),
-                ContentCategory.confidence.label('category_confidence')
-            ).select_from(Chunk).join(
-                Content, Chunk.content_id == Content.id
-            ).join(
+                ContentCategory.confidence.label('category_confidence'),
+                ContentCategory.role.label('category_role'),
+                ContentCategory.source.label('category_source')
+            ).select_from(Content).join(
                 ContentCategory, Content.id == ContentCategory.content_id
             ).join(
                 Category, ContentCategory.category_id == Category.id
@@ -640,7 +640,7 @@ class SearchService:
             if query:
                 base_query = base_query.filter(
                     or_(
-                        Chunk.text.ilike(f"%{query}%"),
+                        Content.text.ilike(f"%{query}%"),
                         Content.title.ilike(f"%{query}%")
                     )
                 )
@@ -651,8 +651,29 @@ class SearchService:
                 desc(Content.created_at)
             ).limit(top_k).all()
             
-            # 格式化结果
-            formatted_results = self._format_search_results(results, query or "", "category")
+            # 格式化结果 - 使用新的Content级别格式化
+            formatted_results = []
+            for result in results:
+                content, category_name, category_color, category_confidence, category_role, category_source = result
+                
+                formatted_results.append({
+                    "score": 1.0,  # 按照分类查询，都是相关的
+                    "text": content.text[:500] if content.text else "",  # 前500字符作为摘要
+                    "title": content.title,
+                    "content_id": str(content.id),
+                    "chunk_id": str(content.id),  # 在分类查询中，使用content_id作为唯一标识
+                    "source_uri": content.source_uri,
+                    "modality": content.modality,
+                    "category": content.category,
+                    "category_name": category_name,
+                    "category_color": category_color,
+                    "category_confidence": float(category_confidence) if category_confidence else None,
+                    "category_role": category_role,
+                    "category_source": category_source,
+                    "tags": content.tags,
+                    "created_at": content.created_at.isoformat() if content.created_at else None,
+                    "match_type": "category"
+                })
             
             return {
                 "category": {

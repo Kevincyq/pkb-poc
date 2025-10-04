@@ -314,22 +314,46 @@ async def get_file_thumbnail(filename: str, db: Session = Depends(get_db)):
         logger.error(f"Error getting thumbnail for {filename}: {e}")
         raise HTTPException(status_code=500, detail=f"获取缩略图失败: {str(e)}")
 
-@router.get("/raw/{filename}")
-async def get_raw_file(filename: str, db: Session = Depends(get_db)):
+@router.get("/{filename}")
+async def get_file(filename: str, db: Session = Depends(get_db)):
     """
-    获取原始文件
+    获取原始文件（用于预览和下载）
     """
     try:
+        logger.info(f"Requesting file: {filename}")
         file_path = get_file_path(filename, db)
+        logger.info(f"Found file path: {file_path}")
         
         if not file_path.exists():
-            raise HTTPException(status_code=404, detail="文件不存在")
+            logger.error(f"File does not exist: {file_path}")
+            raise HTTPException(status_code=404, detail=f"文件不存在: {filename}")
+        
+        # 判断文件类型
+        file_extension = file_path.suffix.lower()
+        
+        # 根据文件类型设置media_type
+        media_type_map = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.gif': 'image/gif',
+            '.bmp': 'image/bmp',
+            '.webp': 'image/webp',
+            '.pdf': 'application/pdf',
+            '.txt': 'text/plain',
+            '.md': 'text/markdown',
+            '.json': 'application/json',
+        }
+        
+        media_type = media_type_map.get(file_extension, 'application/octet-stream')
         
         return FileResponse(
             path=str(file_path),
+            media_type=media_type,
             filename=filename,
             headers={
-                "Cache-Control": "public, max-age=3600"
+                "Cache-Control": "public, max-age=3600",
+                "Content-Disposition": f'inline; filename="{filename}"'  # inline表示浏览器内预览
             }
         )
         
@@ -338,6 +362,13 @@ async def get_raw_file(filename: str, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error serving file {filename}: {e}")
         raise HTTPException(status_code=500, detail=f"获取文件失败: {str(e)}")
+
+@router.get("/raw/{filename}")
+async def get_raw_file(filename: str, db: Session = Depends(get_db)):
+    """
+    获取原始文件（兼容旧接口）
+    """
+    return await get_file(filename, db)
 
 # 公共函数，供其他模块调用
 def pregenerate_thumbnail_if_image(file_path: Path) -> bool:
