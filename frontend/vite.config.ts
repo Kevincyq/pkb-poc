@@ -15,5 +15,19 @@ export default defineConfig({
         rewrite: (path) => path
       }
     }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom'],
+          antd: ['antd', '@ant-design/icons'],
+          router: ['react-router-dom'],
+          query: ['@tanstack/react-query'],
+          utils: ['axios']
+        }
+      }
+    },
+    chunkSizeWarningLimit: 1000
   }
 });
