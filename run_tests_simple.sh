@@ -13,12 +13,37 @@ fi
 cd backend
 
 echo "📦 安装测试依赖..."
-pip3 install --user pytest pytest-asyncio pytest-cov httpx pytest-mock fastapi sqlalchemy pydantic python-dateutil openai
+# 基础测试依赖
+pip3 install --user pytest pytest-asyncio pytest-cov httpx pytest-mock
+
+# 核心应用依赖（测试导入时需要）
+pip3 install --user fastapi sqlalchemy pydantic python-dateutil openai requests
+
+# 文档解析依赖
+pip3 install --user PyPDF2 Markdown chardet
+
+# 网络和存储依赖
+pip3 install --user lxml redis celery
+
+# 图片处理依赖
+pip3 install --user Pillow
+
+# 数据库和向量依赖（测试时用SQLite替代）
+pip3 install --user psycopg2-binary numpy
+
+# 其他工具依赖
+pip3 install --user python-multipart
 
 echo "🔧 设置测试环境..."
+# 设置Python路径
 export PYTHONPATH=$(pwd)
-export DATABASE_URL="sqlite:///:memory:"
+
+# 设置测试环境变量（使用内存数据库）
 export TESTING=true
+export DATABASE_URL="sqlite:///:memory:"
+
+# 确保用户安装的包在PATH中
+export PATH="$HOME/.local/bin:$PATH"
 
 echo "🧪 直接运行测试（跳过验证）..."
 echo "Python路径: $PYTHONPATH"
@@ -52,8 +77,22 @@ python3 -c "
 exec(open('/tmp/mock_pgvector.py').read())
 import subprocess
 import sys
-result = subprocess.run([sys.executable, '-m', 'pytest', 'tests/', '-v', '--tb=short'], 
-                       capture_output=False)
+import os
+
+# 确保用户安装的包在PATH中
+user_bin = os.path.expanduser('~/.local/bin')
+if user_bin not in os.environ.get('PATH', ''):
+    os.environ['PATH'] = user_bin + ':' + os.environ.get('PATH', '')
+
+# 尝试直接使用pytest命令
+pytest_cmd = os.path.expanduser('~/.local/bin/pytest')
+if os.path.exists(pytest_cmd):
+    result = subprocess.run([pytest_cmd, 'tests/', '-v', '--tb=short'], 
+                           capture_output=False)
+else:
+    # 回退到python -m pytest
+    result = subprocess.run([sys.executable, '-m', 'pytest', 'tests/', '-v', '--tb=short'], 
+                           capture_output=False)
 sys.exit(result.returncode)
 "
 
