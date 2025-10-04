@@ -33,6 +33,21 @@ class Content(Base):
     content_categories = relationship("ContentCategory", back_populates="content", cascade="all, delete-orphan")
     content_tags = relationship("ContentTag", cascade="all, delete-orphan")
     signals = relationship("Signals", cascade="all, delete-orphan")
+    
+    @property
+    def tags(self):
+        """返回格式化的标签列表"""
+        if not self.content_tags:
+            return []
+        return [
+            {
+                "id": str(ct.tag.id) if ct.tag else None,
+                "name": ct.tag.name if ct.tag else None,
+                "confidence": ct.confidence,
+                "source": ct.source
+            }
+            for ct in self.content_tags if ct.tag
+        ]
 
 class Chunk(Base):
     __tablename__ = "chunks"

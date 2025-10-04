@@ -235,6 +235,13 @@ class CategoryService:
             from sqlalchemy.orm.attributes import flag_modified
             flag_modified(content, 'meta')
             
+            # 提取并存储标签
+            try:
+                self._extract_and_store_tags(content_uuid, content.text, content.title)
+            except Exception as tag_error:
+                logger.error(f"Error extracting tags for content {content_id}: {tag_error}")
+                # 标签提取失败不影响分类结果
+            
             self.db.commit()
             
             logger.info(f"Successfully classified content {content_id} with {len(created_categories)} categories: {created_categories}")
@@ -655,3 +662,105 @@ class CategoryService:
         except Exception as e:
             logger.error(f"Error getting classification stats: {e}")
             return {}
+    
+    def _extract_and_store_tags(self, content_id, text: str, title: str):
+        """从AI分析结果提取关键词作为标签"""
+        from app.models import Tag, ContentTag
+        
+        try:
+            # 使用GPT提取关键词
+            keywords = self._extract_keywords_with_ai(text, title)
+            
+            if not keywords:
+                logger.info(f"No keywords extracted for content {content_id}")
+                return
+            
+            # 存储到Tag表和ContentTag表（限制最多10个标签）
+            stored_count = 0
+            for keyword in keywords[:10]:
+                keyword = keyword.strip()
+                if not keyword or len(keyword) > 50:  # 跳过空标签或过长标签
+                    continue
+                
+                # 查询或创建Tag
+                tag = self.db.query(Tag).filter(Tag.name == keyword).first()
+                if not tag:
+                    tag = Tag(
+                        name=keyword,
+                        description=f"自动提取的标签"
+                    )
+                    self.db.add(tag)
+                    self.db.flush()
+                
+                # 检查是否已存在关联
+                existing_content_tag = self.db.query(ContentTag).filter(
+                    ContentTag.content_id == content_id,
+                    ContentTag.tag_id == tag.id
+                ).first()
+                
+                if not existing_content_tag:
+                    # 创建ContentTag关联
+                    content_tag = ContentTag(
+                        content_id=content_id,
+                        tag_id=tag.id,
+                        confidence=0.8,
+                        source="ai"
+                    )
+                    self.db.add(content_tag)
+                    stored_count += 1
+            
+            self.db.flush()
+            logger.info(f"Extracted and stored {stored_count} tags for content {content_id}")
+            
+        except Exception as e:
+            logger.error(f"Error in _extract_and_store_tags: {e}")
+            raise
+    
+    def _extract_keywords_with_ai(self, text: str, title: str) -> list:
+        """使用GPT提取关键词"""
+        if not self.openai_enabled:
+            return []
+        
+        try:
+            # 截取文本前800字符
+            text_sample = text[:800] if text else ""
+            
+            prompt = f"""请从以下内容中提取5-8个关键词标签。
+
+标题：{title}
+内容：{text_sample}
+
+要求：
+1. 提取最能代表内容主题和要点的关键词
+2. 关键词应该简洁，2-4个字为佳
+3. 优先提取名词、专有名词、核心概念
+4. 返回JSON数组格式，例如：["关键词1", "关键词2", "关键词3"]
+
+请直接返回JSON数组，不要包含其他文字。"""
+            
+            response = self.openai_client.chat.completions.create(
+                model=self.classification_model,
+                messages=[
+                    {"role": "system", "content": "你是一个专业的关键词提取助手。"},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.3,
+                max_tokens=200
+            )
+            
+            result_text = response.choices[0].message.content.strip()
+            
+            # 解析JSON
+            import json
+            keywords = json.loads(result_text)
+            
+            if isinstance(keywords, list):
+                logger.info(f"Extracted {len(keywords)} keywords: {keywords}")
+                return keywords
+            else:
+                logger.warning(f"Unexpected keywords format: {result_text}")
+                return []
+                
+        except Exception as e:
+            logger.error(f"Error extracting keywords with AI: {e}")
+            return []

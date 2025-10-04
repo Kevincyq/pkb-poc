@@ -39,13 +39,15 @@ THUMBNAIL_DIR.mkdir(exist_ok=True)
 
 def get_file_path(filename: str, db: Session) -> Path:
     """获取文件的实际路径 - 优化版本，支持原始文件名和存储文件名映射"""
-    logger.info(f"Looking for file: {filename}")
+    logger.info(f"🔍 Looking for file: {filename}")
+    logger.info(f"🔍 Filename type: {type(filename)}, repr: {repr(filename)}")
     
     try:
         # URL解码文件名（处理前端传来的编码文件名）
         import urllib.parse
         decoded_filename = urllib.parse.unquote(filename)
-        logger.info(f"Decoded filename: {decoded_filename}")
+        logger.info(f"🔓 Decoded filename: {decoded_filename}")
+        logger.info(f"🔓 Decoded type: {type(decoded_filename)}, repr: {repr(decoded_filename)}")
         
         # 1. 优先通过数据库查找（支持原始文件名和存储文件名）
         # 先尝试通过source_uri查找（存储文件名）
@@ -71,36 +73,44 @@ def get_file_path(filename: str, db: Session) -> Path:
                 Content.title == decoded_filename
             ).first()
         
-        if content and content.meta and isinstance(content.meta, dict):
-            # 优先使用数据库中存储的文件路径
-            actual_path = content.meta.get('file_path')
-            if actual_path:
-                file_path = Path(actual_path)
-                logger.info(f"Database file path: {actual_path}, exists: {file_path.exists()}")
-                if file_path.exists():
-                    logger.info(f"Found file via database: {filename} -> {actual_path}")
-                    return file_path
-                else:
-                    logger.warning(f"Database file path does not exist: {actual_path}")
+        if content:
+            logger.info(f"✅ Found content in database: id={content.id}, title={content.title}, source_uri={content.source_uri}")
+            logger.info(f"📋 Content meta: {content.meta}")
             
-            # 如果数据库路径不存在，尝试使用存储文件名
-            stored_filename = content.meta.get('stored_filename')
-            if stored_filename:
-                stored_path = Path("/app/uploads") / stored_filename
-                if stored_path.exists():
-                    logger.info(f"Found file via stored filename: {filename} -> {stored_path}")
-                    return stored_path
+            if content.meta and isinstance(content.meta, dict):
+                # 优先使用数据库中存储的文件路径
+                actual_path = content.meta.get('file_path')
+                if actual_path:
+                    file_path = Path(actual_path)
+                    logger.info(f"📂 Database file path: {actual_path}, exists: {file_path.exists()}")
+                    if file_path.exists():
+                        logger.info(f"✅ Found file via database file_path: {filename} -> {actual_path}")
+                        return file_path
+                    else:
+                        logger.warning(f"⚠️ Database file path does not exist: {actual_path}")
+            
+                # 如果数据库路径不存在，尝试使用存储文件名
+                stored_filename = content.meta.get('stored_filename')
+                if stored_filename:
+                    stored_path = Path("/app/uploads") / stored_filename
+                    logger.info(f"📂 Trying stored_filename: {stored_filename}, path: {stored_path}, exists: {stored_path.exists()}")
+                    if stored_path.exists():
+                        logger.info(f"✅ Found file via stored filename: {filename} -> {stored_path}")
+                        return stored_path
             
             # 如果前端传来的是原始文件名，但数据库中存储的是带时间戳的文件名
             # 尝试通过source_uri获取实际的存储文件名
             if content.source_uri and content.source_uri.startswith('webui://'):
                 actual_stored_filename = content.source_uri.replace('webui://', '')
                 stored_path = Path("/app/uploads") / actual_stored_filename
+                logger.info(f"📂 Trying source_uri filename: {actual_stored_filename}, path: {stored_path}, exists: {stored_path.exists()}")
                 if stored_path.exists():
-                    logger.info(f"Found file via source_uri: {filename} -> {stored_path}")
+                    logger.info(f"✅ Found file via source_uri: {filename} -> {stored_path}")
                     return stored_path
+                else:
+                    logger.warning(f"⚠️ Source URI file not found: {stored_path}")
         else:
-            logger.info(f"No database record found for: {filename}")
+            logger.warning(f"❌ No database record found for: {filename}")
         
         # 2. 尝试直接匹配文件名（备用方案）
         possible_locations = [

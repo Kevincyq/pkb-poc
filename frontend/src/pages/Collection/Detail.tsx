@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Input, message, Empty, Spin, Modal } from 'antd';
+import { Input, message, Empty, Spin, Modal, Tag } from 'antd';
 import { HomeOutlined } from '@ant-design/icons';
 import MainLayout from '../../components/Layout/MainLayout';
 import DocumentCard from '../../components/Document/DocumentCard';
@@ -205,6 +205,16 @@ export default function CollectionDetail() {
                   {previewDocument.category_name && (
                     <p><strong>分类：</strong>{previewDocument.category_name}</p>
                   )}
+                  {previewDocument.tags && previewDocument.tags.length > 0 && (
+                    <p>
+                      <strong>标签：</strong>
+                      {previewDocument.tags.map((tag: any, index: number) => (
+                        <Tag key={index} color="blue" style={{ marginRight: '4px', marginTop: '4px' }}>
+                          {tag.name}
+                        </Tag>
+                      ))}
+                    </p>
+                  )}
                 </div>
               </div>
             ) : (
@@ -225,6 +235,16 @@ export default function CollectionDetail() {
                   <p><strong>创建时间：</strong>{new Date(previewDocument.created_at).toLocaleString()}</p>
                   {previewDocument.category_name && (
                     <p><strong>分类：</strong>{previewDocument.category_name}</p>
+                  )}
+                  {previewDocument.tags && previewDocument.tags.length > 0 && (
+                    <p>
+                      <strong>标签：</strong>
+                      {previewDocument.tags.map((tag: any, index: number) => (
+                        <Tag key={index} color="blue" style={{ marginRight: '4px', marginTop: '4px' }}>
+                          {tag.name}
+                        </Tag>
+                      ))}
+                    </p>
                   )}
                   {previewDocument.text && (
                     <div>

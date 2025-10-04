@@ -405,3 +405,47 @@
 .markdownContent br {
   line-height: 0.5;
 }
+
+/* 相关文档来源样式 */
+.sourcesContainer {
+  margin-top: 16px;
+  padding: 12px;
+  background: #f5f9ff;
+  border-left: 3px solid #1890ff;
+  border-radius: 4px;
+}
+
+.sourcesTitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1890ff;
+  margin-bottom: 8px;
+}
+
+.sourcesList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sourceLink {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  color: #1890ff;
+  text-decoration: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.sourceLink:hover {
+  background: #e6f7ff;
+  color: #096dd9;
+}
+
+.sourceConfidence {
+  margin-left: 6px;
+  font-size: 12px;
+  color: #8c8c8c;
+}

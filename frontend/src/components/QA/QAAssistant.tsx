@@ -94,7 +94,8 @@ export default function QAAssistant({
         type: 'assistant',
         content: response.answer,
         timestamp: new Date(),
-        isTyping: true
+        isTyping: true,
+        sources: response.sources || []  // 包含相关文档来源
       };
 
       setMessages(prev => [...prev, assistantMessage]);
@@ -270,10 +271,44 @@ export default function QAAssistant({
                       }`}
                     >
                       {msg.type === 'assistant' ? (
-                        <MarkdownRenderer 
-                          content={msg.content} 
-                          className={styles.markdownContent}
-                        />
+                        <>
+                          <MarkdownRenderer 
+                            content={msg.content} 
+                            className={styles.markdownContent}
+                          />
+                          {/* 显示相关文档来源 */}
+                          {msg.sources && msg.sources.length > 0 && (
+                            <div className={styles.sourcesContainer}>
+                              <div className={styles.sourcesTitle}>📚 相关文档：</div>
+                              <div className={styles.sourcesList}>
+                                {msg.sources.map((source, index) => (
+                                  <a
+                                    key={index}
+                                    href={source.category_name 
+                                      ? `/collection/${encodeURIComponent(source.category_name)}?highlight=${source.content_id}`
+                                      : '#'}
+                                    className={styles.sourceLink}
+                                    onClick={(e) => {
+                                      if (!source.category_name) {
+                                        e.preventDefault();
+                                        return;
+                                      }
+                                      // 关闭QA助理
+                                      onClose();
+                                    }}
+                                  >
+                                    {index + 1}. {source.title}
+                                    {source.confidence_percentage && (
+                                      <span className={styles.sourceConfidence}>
+                                        ({Math.round(source.confidence_percentage)}%)
+                                      </span>
+                                    )}
+                                  </a>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </>
                       ) : (
                         msg.content
                       )}

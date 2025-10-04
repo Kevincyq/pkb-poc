@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Input, List, Typography, Spin, Empty, Tag } from 'antd';
 import { SearchOutlined, FileOutlined, CloseOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import ErrorBoundary from '../ErrorBoundary';
 import HighlightText from './HighlightText';
@@ -29,6 +30,7 @@ interface SearchOverlayProps {
 }
 
 export default function SearchOverlay({ visible, onClose }: SearchOverlayProps) {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -110,10 +112,10 @@ export default function SearchOverlay({ visible, onClose }: SearchOverlayProps) 
     }
   };
 
-  // 处理搜索输入
+  // 处理搜索输入（只更新状态，按回车触发搜索）
   const handleSearch = (value: string) => {
     setSearchQuery(value);
-    performSearch(value);
+    // 不立即搜索，避免频繁请求导致结果不稳定
   };
 
   // 处理回车搜索
@@ -132,11 +134,24 @@ export default function SearchOverlay({ visible, onClose }: SearchOverlayProps) 
     return <FileOutlined style={{ color: '#1890ff' }} />;
   };
 
-  // 处理结果点击
+  // 处理结果点击 - 跳转到合集并高亮文件
   const handleResultClick = (result: SearchResult) => {
-    // 这里可以添加跳转到文档详情的逻辑
-    console.log('Clicked result:', result);
+    console.log('Search result clicked:', result);
+    
+    // 关闭搜索框
     onClose();
+    
+    // 跳转到文件所在的合集，并高亮该文件
+    if (result.category_name) {
+      const categoryPath = encodeURIComponent(result.category_name);
+      const contentId = result.content_id;
+      console.log(`Navigating to: /collection/${categoryPath}?highlight=${contentId}`);
+      navigate(`/collection/${categoryPath}?highlight=${contentId}`);
+    } else {
+      console.warn('No category info for search result, cannot navigate');
+      // 如果没有分类信息，显示提示
+      alert('该文件暂未分类，无法跳转到合集');
+    }
   };
 
   if (!visible) return null;
