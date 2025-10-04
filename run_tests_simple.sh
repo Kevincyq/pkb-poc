@@ -45,7 +45,17 @@ import sys
 sys.path.insert(0, '/tmp')
 import mock_pgvector
 print('✅ pgvector mock加载成功')
-" && python3 -c "exec(open('/tmp/mock_pgvector.py').read())" -m pytest tests/ -v --tb=short --no-header
+"
+
+# 运行pytest，在Python中预先加载mock
+python3 -c "
+exec(open('/tmp/mock_pgvector.py').read())
+import subprocess
+import sys
+result = subprocess.run([sys.executable, '-m', 'pytest', 'tests/', '-v', '--tb=short'], 
+                       capture_output=False)
+sys.exit(result.returncode)
+"
 
 TEST_EXIT_CODE=$?
 
