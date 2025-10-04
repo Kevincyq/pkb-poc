@@ -219,14 +219,20 @@ class CollectionMatchingService:
             logger.info(f"Found {len(collections)} user collections to check for content {content_id}")
             
             for collection in collections:
-                logger.debug(f"Checking collection {collection.name} (id: {collection.id})")
+                logger.info(f"🔍 Checking collection '{collection.name}' (id: {collection.id}) for content '{content.title}'")
+                
+                # 检查合集是否有关联的Category
+                if not collection.category_id:
+                    logger.warning(f"⚠️ Collection '{collection.name}' has no associated category_id, skipping")
+                    continue
+                
                 if self._is_document_match_collection(content, collection):
                     # 创建文档-合集关联
                     self._create_content_collection_association(content_id, str(collection.id))
                     matched_collections.append(str(collection.id))
-                    logger.info(f"✅ Document {content_id} matched to collection {collection.name}")
+                    logger.info(f"✅ Document '{content.title}' matched to collection '{collection.name}'")
                 else:
-                    logger.debug(f"❌ Document {content_id} did not match collection {collection.name}")
+                    logger.info(f"❌ Document '{content.title}' did not match collection '{collection.name}'")
             
             # 更新Content的分类状态（合集匹配完成）
             if content.meta is None:
@@ -285,15 +291,47 @@ class CollectionMatchingService:
             activity_score = self._calculate_activity_match_score(content, rules)
             match_score += activity_score * 0.3  # 活动推理权重30%
             
-            logger.info(f"Match score for '{content.title}' -> '{collection.name}': "
+            logger.info(f"🎯 Match score for '{content.title}' -> '{collection.name}': "
                        f"title={title_score:.2f}, content={content_score:.2f}, activity={activity_score:.2f}, "
                        f"total={match_score:.2f}, threshold={threshold:.2f}, "
                        f"match={match_score >= threshold}")
+            
+            # 特殊处理：如果是明显的匹配（如"迪士尼"图片匹配"旅游"合集），降低阈值
+            if self._is_obvious_match(content, collection):
+                logger.info(f"🎯 Obvious match detected, using lower threshold")
+                return match_score >= 0.3  # 降低阈值
             
             return match_score >= threshold
             
         except Exception as e:
             logger.error(f"Error calculating match score: {e}")
+            return False
+    
+    def _is_obvious_match(self, content: Content, collection: Collection) -> bool:
+        """检测明显的匹配情况"""
+        try:
+            title = content.title.lower() if content.title else ""
+            collection_name = collection.name.lower()
+            
+            # 明显匹配的模式
+            obvious_patterns = {
+                "旅游": ["迪士尼", "景区", "景点", "风景", "旅行", "度假", "酒店", "套餐"],
+                "会议纪要": ["会议", "纪要", "meeting", "minutes"],
+                "工作": ["工作", "项目", "报告", "总结"],
+                "学习": ["学习", "笔记", "教程", "课程"]
+            }
+            
+            for pattern_key, keywords in obvious_patterns.items():
+                if pattern_key in collection_name:
+                    for keyword in keywords:
+                        if keyword in title:
+                            logger.info(f"🎯 Obvious match: '{title}' contains '{keyword}' for collection '{collection_name}'")
+                            return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error in _is_obvious_match: {e}")
             return False
     
     def _calculate_title_match_score(self, title: str, rules: Dict) -> float:

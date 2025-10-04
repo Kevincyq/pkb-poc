@@ -125,6 +125,17 @@ export default function SearchOverlay({ visible, onClose }: SearchOverlayProps) 
     }
   };
 
+  // 处理清除搜索内容
+  const handleClearSearch = () => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setHasSearched(false);
+    // 清除后自动聚焦输入框
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
+  };
+
 
   // 获取文件类型图标
   const getFileIcon = (modality: string) => {
@@ -171,10 +182,13 @@ export default function SearchOverlay({ visible, onClose }: SearchOverlayProps) 
             onKeyPress={handleKeyPress}
             prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
             suffix={
-              <CloseOutlined 
-                style={{ color: '#bfbfbf', cursor: 'pointer' }} 
-                onClick={onClose}
-              />
+              searchQuery ? (
+                <CloseOutlined 
+                  style={{ color: '#bfbfbf', cursor: 'pointer' }} 
+                  onClick={handleClearSearch}
+                  title="清除搜索内容"
+                />
+              ) : null
             }
             style={{
               borderRadius: '8px',

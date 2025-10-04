@@ -50,25 +50,28 @@ def get_file_path(filename: str, db: Session) -> Path:
         logger.info(f"🔓 Decoded type: {type(decoded_filename)}, repr: {repr(decoded_filename)}")
         
         # 1. 优先通过数据库查找（支持原始文件名和存储文件名）
-        # 先尝试通过source_uri查找（存储文件名）
+        logger.info(f"🔍 Step 1: 尝试通过source_uri查找: webui://{filename}")
         content = db.query(Content).filter(
             Content.source_uri == f"webui://{filename}"
         ).first()
         
         # 如果没找到，尝试解码后的文件名
         if not content:
+            logger.info(f"🔍 Step 2: 尝试通过解码后的source_uri查找: webui://{decoded_filename}")
             content = db.query(Content).filter(
                 Content.source_uri == f"webui://{decoded_filename}"
             ).first()
         
         # 如果没找到，尝试通过原始文件名查找
         if not content:
+            logger.info(f"🔍 Step 3: 尝试通过title查找: {filename}")
             content = db.query(Content).filter(
                 Content.title == filename
             ).first()
             
         # 如果没找到，尝试解码后的原始文件名
         if not content:
+            logger.info(f"🔍 Step 4: 尝试通过解码后的title查找: {decoded_filename}")
             content = db.query(Content).filter(
                 Content.title == decoded_filename
             ).first()
