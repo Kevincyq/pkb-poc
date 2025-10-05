@@ -28,6 +28,29 @@ logger.info(f"🚀 PKB Backend starting with log level: {log_level}")
 # 创建数据库表结构
 Base.metadata.create_all(bind=engine)
 
+# 自动初始化系统分类
+def initialize_system_data():
+    """应用启动时自动初始化系统数据"""
+    try:
+        from app.db import SessionLocal
+        from app.services.category_service import CategoryService
+        
+        db = SessionLocal()
+        try:
+            category_service = CategoryService(db)
+            success = category_service.initialize_system_categories()
+            if success:
+                logger.info("✅ System categories initialized successfully")
+            else:
+                logger.warning("⚠️ Failed to initialize system categories")
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"❌ Error during system initialization: {e}")
+
+# 执行系统初始化
+initialize_system_data()
+
 class ProxyHeadersMiddleware(BaseHTTPMiddleware):
     """处理代理头的中间件，确保FastAPI正确识别HTTPS协议"""
     async def dispatch(self, request: Request, call_next):
