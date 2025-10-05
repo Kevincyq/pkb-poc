@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Input, message, Empty, Spin, Modal } from 'antd';
+import { Input, message, Empty, Spin, Modal, Tag } from 'antd';
 import { HomeOutlined } from '@ant-design/icons';
 import MainLayout from '../../components/Layout/MainLayout';
 import DocumentCard from '../../components/Document/DocumentCard';
@@ -171,7 +171,18 @@ export default function CollectionDetail() {
             {previewDocument.modality === 'image' ? (
               <div>
                 <img
-                  src={`//pkb.kmchat.cloud/api/files/thumbnail/${encodeURIComponent(previewDocument.title)}`}
+                  src={(() => {
+                    // 获取API基础URL
+                    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 
+                      (window.location.hostname === 'localhost' 
+                        ? 'http://localhost:8003/api' 
+                        : 'https://pkb-test.kmchat.cloud/api'
+                      );
+                    // 从source_uri提取文件名
+                    const fileName = previewDocument.source_uri.replace(/^(webui|nextcloud):\/\//, '');
+                    // 使用原始文件API（而非缩略图）获取高清图片
+                    return `${apiBaseUrl}/files/${encodeURIComponent(fileName)}`;
+                  })()}
                   alt={previewDocument.title}
                   style={{
                     maxWidth: '100%',
@@ -182,7 +193,7 @@ export default function CollectionDetail() {
                     boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
                   }}
                   onError={(e) => {
-                    // 如果缩略图加载失败，显示占位符
+                    // 如果原始图片加载失败，显示占位符
                     const target = e.target as HTMLImageElement;
                     target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2Y1ZjVmNSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj7ml6Dms5Xmn6XnnIvlm77niYc8L3RleHQ+PC9zdmc+';
                   }}
@@ -193,6 +204,16 @@ export default function CollectionDetail() {
                   <p><strong>创建时间：</strong>{new Date(previewDocument.created_at).toLocaleString()}</p>
                   {previewDocument.category_name && (
                     <p><strong>分类：</strong>{previewDocument.category_name}</p>
+                  )}
+                  {previewDocument.tags && previewDocument.tags.length > 0 && (
+                    <p>
+                      <strong>标签：</strong>
+                      {previewDocument.tags.map((tag: any, index: number) => (
+                        <Tag key={index} color="blue" style={{ marginRight: '4px', marginTop: '4px' }}>
+                          {tag.name}
+                        </Tag>
+                      ))}
+                    </p>
                   )}
                 </div>
               </div>
@@ -214,6 +235,16 @@ export default function CollectionDetail() {
                   <p><strong>创建时间：</strong>{new Date(previewDocument.created_at).toLocaleString()}</p>
                   {previewDocument.category_name && (
                     <p><strong>分类：</strong>{previewDocument.category_name}</p>
+                  )}
+                  {previewDocument.tags && previewDocument.tags.length > 0 && (
+                    <p>
+                      <strong>标签：</strong>
+                      {previewDocument.tags.map((tag: any, index: number) => (
+                        <Tag key={index} color="blue" style={{ marginRight: '4px', marginTop: '4px' }}>
+                          {tag.name}
+                        </Tag>
+                      ))}
+                    </p>
                   )}
                   {previewDocument.text && (
                     <div>

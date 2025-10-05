@@ -58,15 +58,22 @@ const UploadStatusCard: React.FC<UploadStatusCardProps> = ({
   const getStatusText = () => {
     switch (file.status) {
       case 'uploading':
-        return '正在上传...';
+        return file.uploadProgress ? `上传中 ${file.uploadProgress}%` : '正在上传...';
       case 'parsing':
-        return '正在解析文件内容...';
+        return '解析文档内容中...';
       case 'classifying':
-        return '正在AI智能分类...';
+        // 根据进度显示更具体的分类阶段
+        if (file.progress && file.progress >= 85) {
+          return 'AI精准分类中...';
+        } else if (file.progress && file.progress >= 60) {
+          return '智能分类中...';
+        } else {
+          return '准备分类中...';
+        }
       case 'completed':
-        return '处理完成';
+        return '✅ 处理完成';
       case 'error':
-        return '处理失败';
+        return '❌ 处理失败';
       default:
         return '等待处理';
     }
@@ -103,6 +110,22 @@ const UploadStatusCard: React.FC<UploadStatusCardProps> = ({
     return `${minutes}分${seconds % 60}秒`;
   };
 
+  const getEstimatedTimeRemaining = () => {
+    if (file.status === 'completed' || file.status === 'error') return null;
+    
+    const progress = file.status === 'uploading' ? (file.uploadProgress || 0) : (file.progress || 0);
+    if (progress <= 0) return null;
+    
+    const elapsed = Date.now() - file.startTime;
+    const totalEstimated = (elapsed / progress) * 100;
+    const remaining = Math.max(0, totalEstimated - elapsed);
+    
+    const remainingSeconds = Math.floor(remaining / 1000);
+    if (remainingSeconds < 60) return `约${remainingSeconds}秒`;
+    const remainingMinutes = Math.floor(remainingSeconds / 60);
+    return `约${remainingMinutes}分钟`;
+  };
+
   return (
     <Card 
       size="small" 
@@ -130,6 +153,11 @@ const UploadStatusCard: React.FC<UploadStatusCardProps> = ({
             <Text type="secondary" style={{ fontSize: 12 }}>
               {getElapsedTime()}
             </Text>
+            {getEstimatedTimeRemaining() && (
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                剩余{getEstimatedTimeRemaining()}
+              </Text>
+            )}
           </div>
 
           {/* 状态标签 */}
@@ -143,8 +171,27 @@ const UploadStatusCard: React.FC<UploadStatusCardProps> = ({
               percent={file.status === 'uploading' ? (file.uploadProgress || 0) : file.progress}
               size="small"
               status="active"
-              showInfo={false}
-              style={{ marginBottom: 8 }}
+              showInfo={true}
+              format={(percent) => {
+                if (file.status === 'uploading') {
+                  return `${percent}%`;
+                } else if (file.status === 'parsing') {
+                  return '解析中';
+                } else if (file.status === 'classifying') {
+                  if (percent && percent >= 85) {
+                    return 'AI分类';
+                  } else if (percent && percent >= 60) {
+                    return '智能分类';
+                  } else {
+                    return '准备中';
+                  }
+                }
+                return `${percent}%`;
+              }}
+              style={{ 
+                marginBottom: 8,
+                transition: 'all 0.3s ease'
+              }}
             />
           )}
 
@@ -158,11 +205,12 @@ const UploadStatusCard: React.FC<UploadStatusCardProps> = ({
                 {file.categories.map((category) => (
                   <Tag 
                     key={category.id} 
-                    color="blue" 
+                    color={category.color || 'blue'}
                     style={{ cursor: 'pointer' }}
                     onClick={() => onViewCollection?.(category.name)}
                   >
                     {category.name} ({Math.round(category.confidence * 100)}%)
+                    {category.role === 'user_rule' && ' 📁'}
                   </Tag>
                 ))}
               </Space>

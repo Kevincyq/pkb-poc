@@ -28,6 +28,9 @@ interface DocumentCardProps {
     name: string;
     color: string;
     is_system: boolean;
+    confidence?: number;
+    role?: string;
+    source?: string;
   }>;
   onClick?: () => void;
   onDelete?: (id: string) => void;
@@ -49,6 +52,7 @@ export default function DocumentCard({
     id, title, modality, sourceUri, createdAt, hasOnClick: !!onClick, hasOnDelete: !!onDelete
   });
   const [isDeleting, setIsDeleting] = useState(false);
+  const [thumbnailError, setThumbnailError] = useState(false);
   // 根据文件名获取文件类型图标和显示名称
   const getFileTypeIcon = (fileName: string, modality: string) => {
     const extension = fileName.toLowerCase().split('.').pop() || '';
@@ -105,10 +109,19 @@ export default function DocumentCard({
     // 重新启用真实缩略图功能
     console.log(`🔍 Getting thumbnail URL for: ${sourceUri}`);
     
+    // 确定API基础URL（与api.ts保持一致）
+    // 优先使用环境变量，与api.ts的逻辑保持一致
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 
+      (window.location.hostname === 'localhost' 
+        ? 'http://localhost:8003/api' 
+        : 'https://pkb-test.kmchat.cloud/api'
+      );
+    
     // 如果是webui上传的图片，尝试使用后端缩略图
     if (sourceUri.includes('webui://')) {
       const fileName = sourceUri.replace('webui://', '');
-      const thumbnailUrl = `//pkb.kmchat.cloud/api/files/thumbnail/${encodeURIComponent(fileName)}`;
+      // 使用实际存储的文件名（从source_uri获取），进行URL编码以处理中文字符
+      const thumbnailUrl = `${apiBaseUrl}/files/thumbnail/${encodeURIComponent(fileName)}`;
       console.log(`📸 WebUI thumbnail URL: ${thumbnailUrl}`);
       return thumbnailUrl;
     }
@@ -116,7 +129,7 @@ export default function DocumentCard({
     // 如果是nextcloud的图片，也可以尝试生成缩略图
     if (sourceUri.includes('nextcloud://')) {
       const fileName = sourceUri.replace('nextcloud://', '');
-      const thumbnailUrl = `//pkb.kmchat.cloud/api/files/thumbnail/${encodeURIComponent(fileName)}`;
+      const thumbnailUrl = `${apiBaseUrl}/files/thumbnail/${fileName}`;
       console.log(`☁️ Nextcloud thumbnail URL: ${thumbnailUrl}`);
       return thumbnailUrl;
     }
@@ -175,7 +188,7 @@ export default function DocumentCard({
     if (modality === 'image') {
       const thumbnailUrl = getThumbnailUrl(sourceUri);
       
-      if (thumbnailUrl) {
+      if (thumbnailUrl && !thumbnailError) {
         return (
           <div style={{
             width: '100%',
@@ -191,44 +204,9 @@ export default function DocumentCard({
                 height: '100%',
                 objectFit: 'cover'
               }}
-              onError={(e) => {
+              onError={() => {
                 console.log(`❌ Thumbnail failed to load: ${thumbnailUrl}`);
-                console.log('Error event:', e);
-                // 如果真实缩略图加载失败，显示彩色渐变回退
-                const target = e.target as HTMLImageElement;
-                const parent = target.parentElement;
-                if (parent) {
-                  const colorStyle = generateColorThumbnail(title, modality);
-                  if (colorStyle) {
-                    parent.innerHTML = '';
-                    const fallbackDiv = document.createElement('div');
-                    Object.assign(fallbackDiv.style, {
-                      width: '100%',
-                      height: '100%',
-                      ...colorStyle
-                    });
-                    fallbackDiv.innerHTML = `
-                      <div style="
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        gap: 8px;
-                      ">
-                        <div style="font-size: 48px;">🖼️</div>
-                        <div style="
-                          font-size: 12px;
-                          text-align: center;
-                          opacity: 0.9;
-                          max-width: 120px;
-                          overflow: hidden;
-                          text-overflow: ellipsis;
-                          white-space: nowrap;
-                        ">${title}</div>
-                      </div>
-                    `;
-                    parent.appendChild(fallbackDiv);
-                  }
-                }
+                setThumbnailError(true);
               }}
               onLoad={() => {
                 console.log(`✅ Thumbnail loaded successfully: ${thumbnailUrl}`);
@@ -467,20 +445,50 @@ export default function DocumentCard({
               flexWrap: 'wrap',
               gap: '4px'
             }}>
-              {categories.map((category) => (
-                <Tag 
-                  key={category.id}
-                  color={category.color}
-                  style={{
-                    fontSize: '10px',
-                    padding: '0 4px',
-                    margin: 0,
-                    border: category.is_system ? 'none' : '1px dashed'
-                  }}
-                >
-                  {category.is_system ? '🤖' : '📁'} {category.name}
-                </Tag>
-              ))}
+              {categories.map((category) => {
+                // 根据角色确定样式
+                const isPrimary = category.role === 'primary_system';
+                const isSecondary = category.role === 'secondary_system';
+                const isUserRule = category.role === 'user_rule';
+                
+                // 确定图标和样式
+                let icon = '🤖';
+                let borderStyle = 'none';
+                let opacity = 1;
+                
+                if (isUserRule) {
+                  icon = '📁';
+                  borderStyle = '1px dashed';
+                } else if (isSecondary) {
+                  icon = '🔗';
+                  opacity = 0.8;
+                } else if (isPrimary) {
+                  icon = '⭐';
+                }
+                
+                return (
+                  <Tag 
+                    key={category.id}
+                    color={category.color}
+                    style={{
+                      fontSize: '10px',
+                      padding: '0 4px',
+                      margin: 0,
+                      border: borderStyle,
+                      opacity: opacity,
+                      fontWeight: isPrimary ? 'bold' : 'normal'
+                    }}
+                    title={`${category.name} (${category.role}, 置信度: ${(category.confidence || 0) * 100}%)`}
+                  >
+                    {icon} {category.name}
+                    {category.confidence && category.confidence < 1 && (
+                      <span style={{ fontSize: '8px', opacity: 0.7 }}>
+                        {Math.round(category.confidence * 100)}%
+                      </span>
+                    )}
+                  </Tag>
+                );
+              })}
             </div>
           )}
           

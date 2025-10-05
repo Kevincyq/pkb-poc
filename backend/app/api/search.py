@@ -12,6 +12,15 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+@router.get("/health")
+async def search_health():
+    """搜索服务健康检查"""
+    return {
+        "status": "ok",
+        "service": "search",
+        "timestamp": "2024-10-04T03:00:00Z"
+    }
+
 def get_db():
     db = SessionLocal()
     try: 
@@ -26,6 +35,12 @@ async def search(
     search_type: str = Query("hybrid", description="搜索类型: keyword, semantic, hybrid"),
     modality: Optional[str] = Query(None, description="内容类型过滤"),
     category: Optional[str] = Query(None, description="分类过滤"),
+    categories: Optional[str] = Query(None, description="多个分类过滤，逗号分隔"),
+    collections: Optional[str] = Query(None, description="合集过滤，逗号分隔"),
+    role: Optional[str] = Query(None, description="分类角色过滤"),
+    source: Optional[str] = Query(None, description="分类来源过滤"),
+    confidence_min: Optional[float] = Query(None, description="最小置信度"),
+    confidence_max: Optional[float] = Query(None, description="最大置信度"),
     db: Session = Depends(get_db)
 ):
     """
@@ -37,11 +52,30 @@ async def search(
         filters["modality"] = modality
     if category:
         filters["category"] = category
+    if categories:
+        # 解析逗号分隔的分类列表
+        filters["categories"] = [cat.strip() for cat in categories.split(",") if cat.strip()]
+    if collections:
+        # 解析逗号分隔的合集列表
+        filters["collections"] = [col.strip() for col in collections.split(",") if col.strip()]
+    if role:
+        filters["role"] = role
+    if source:
+        filters["source"] = source
+    if confidence_min is not None:
+        filters["confidence_min"] = confidence_min
+    if confidence_max is not None:
+        filters["confidence_max"] = confidence_max
     
     try:
+        # 添加调试日志
+        logger.info(f"Search request received: query={query}, top_k={top_k}, search_type={search_type}")
+        logger.info(f"Filters: {filters}")
+        
         # URL解码查询参数
         decoded_query = unquote(query) if query else ""
         if not decoded_query:
+            logger.warning("Empty query received")
             return {
                 "query": "",
                 "results": [],
@@ -52,9 +86,14 @@ async def search(
                 "error": "Query parameter is required"
             }
 
+        logger.info(f"Decoded query: {decoded_query}")
+        
         # 使用搜索服务
         search_service = SearchService(db)
+        logger.info("SearchService created successfully")
+        
         results = search_service.search(decoded_query, top_k, search_type, filters)
+        logger.info(f"Search completed, results count: {len(results.get('results', []))}")
         
         # 确保返回有效的JSON
         if not isinstance(results, dict):

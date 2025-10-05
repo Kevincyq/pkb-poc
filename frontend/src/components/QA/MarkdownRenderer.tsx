@@ -4,6 +4,7 @@
  */
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import SafeMarkdownRenderer from './SafeMarkdownRenderer';
 
 interface MarkdownRendererProps {
   content: string;
@@ -32,10 +33,15 @@ export default function MarkdownRenderer({ content, className }: MarkdownRendere
 
   // 简单的Markdown转HTML
   const renderMarkdown = (text: string): string => {
-    // 按行分割处理
-    const lines = text.split('\n');
-    const processedLines: string[] = [];
-    let inList = false;
+    if (!text || typeof text !== 'string') {
+      return '';
+    }
+    
+    try {
+      // 按行分割处理
+      const lines = text.split('\n');
+      const processedLines: string[] = [];
+      let inList = false;
     
     for (let i = 0; i < lines.length; i++) {
       let line = lines[i];
@@ -112,25 +118,21 @@ export default function MarkdownRenderer({ content, className }: MarkdownRendere
       processedLines.push(`<p>${formattedLine}</p>`);
     }
     
-    // 关闭未关闭的列表
-    if (inList) {
-      processedLines.push('</ul>');
+      // 关闭未关闭的列表
+      if (inList) {
+        processedLines.push('</ul>');
+      }
+      
+      return processedLines.join('');
+    } catch (error) {
+      console.error('Error in renderMarkdown:', error);
+      return '';
     }
-    
-    return processedLines.join('');
   };
 
   return (
-    <div 
-      className={className}
-      onClick={handleLinkClick}
-      dangerouslySetInnerHTML={{ 
-        __html: renderMarkdown(content) 
-      }}
-      style={{
-        lineHeight: '1.6',
-        color: '#333'
-      }}
-    />
+    <div onClick={handleLinkClick}>
+      <SafeMarkdownRenderer content={content} className={className} />
+    </div>
   );
 }

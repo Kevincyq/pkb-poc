@@ -33,7 +33,17 @@ class SearchService:
             query: 搜索查询
             top_k: 返回结果数量
             search_type: 搜索类型 ("keyword", "semantic", "hybrid")
-            filters: 过滤条件 {"modality": "text", "created_by": "memo.api"}
+            filters: 过滤条件，支持以下选项：
+                - modality: 文件类型 ("text", "image", "pdf")
+                - created_by: 创建者
+                - categories: 分类名称列表 ["生活点滴", "职场商务"]
+                - collections: 合集名称列表 ["旅游", "会议纪要"]
+                - role: 分类角色 ("primary_system", "secondary_system", "user_rule")
+                - source: 分类来源 ("ml", "heuristic", "rule")
+                - confidence_min: 最小置信度 (0.0-1.0)
+                - confidence_max: 最大置信度 (0.0-1.0)
+                - date_from: 起始日期
+                - date_to: 结束日期
         
         Returns:
             搜索结果字典
@@ -317,14 +327,19 @@ class SearchService:
                 query = query.filter(Content.modality == value)
             elif key == "created_by":
                 query = query.filter(Content.created_by == value)
-            elif key == "category":
-                # 支持按分类ID或分类名称筛选
-                if isinstance(value, str) and len(value) == 36:  # UUID格式
-                    # 通过ContentCategory表关联查询
-                    query = query.join(ContentCategory).join(Category).filter(Category.id == value)
-                else:
-                    # 按分类名称查询
-                    query = query.join(ContentCategory).join(Category).filter(Category.name == value)
+            elif key == "category" or key == "categories":
+                # 支持按分类ID或分类名称筛选（单个或多个）
+                categories = value if isinstance(value, list) else [value]
+                category_conditions = []
+                
+                for cat in categories:
+                    if isinstance(cat, str) and len(cat) == 36:  # UUID格式
+                        category_conditions.append(Category.id == cat)
+                    else:
+                        category_conditions.append(Category.name == cat)
+                
+                if category_conditions:
+                    query = query.join(ContentCategory).join(Category).filter(or_(*category_conditions))
             elif key == "collection_id":
                 # 新增：按合集ID筛选
                 try:
@@ -342,6 +357,31 @@ class SearchService:
                 query = query.filter(Content.created_at >= value)
             elif key == "date_to":
                 query = query.filter(Content.created_at <= value)
+            elif key == "role":
+                # 按分类角色筛选 (primary_system, secondary_system, user_rule)
+                query = query.join(ContentCategory).filter(ContentCategory.role == value)
+            elif key == "source":
+                # 按分类来源筛选 (ml, heuristic, rule)
+                query = query.join(ContentCategory).filter(ContentCategory.source == value)
+            elif key == "confidence_min":
+                # 按最小置信度筛选
+                query = query.join(ContentCategory).filter(ContentCategory.confidence >= float(value))
+            elif key == "confidence_max":
+                # 按最大置信度筛选
+                query = query.join(ContentCategory).filter(ContentCategory.confidence <= float(value))
+            elif key == "collections":
+                # 支持多个合集筛选
+                collections = value if isinstance(value, list) else [value]
+                collection_conditions = []
+                
+                for collection_name in collections:
+                    # 通过合集名称查找对应的分类
+                    collection = self.db.query(Collection).filter(Collection.name == collection_name).first()
+                    if collection and collection.category_id:
+                        collection_conditions.append(ContentCategory.category_id == collection.category_id)
+                
+                if collection_conditions:
+                    query = query.join(ContentCategory).filter(or_(*collection_conditions))
         return query
     
     def _filter_by_relevance(self, results: List[Tuple], query: str, top_k: int) -> List[Tuple]:
@@ -581,14 +621,14 @@ class SearchService:
                     "category_identifier": category_identifier
                 }
             
-            # 构建查询
+            # 构建查询 - 直接使用Content表，避免Chunk导致重复
             base_query = self.db.query(
-                Chunk, Content, Category.name.label('category_name'),
+                Content, Category.name.label('category_name'),
                 Category.color.label('category_color'),
-                ContentCategory.confidence.label('category_confidence')
-            ).select_from(Chunk).join(
-                Content, Chunk.content_id == Content.id
-            ).join(
+                ContentCategory.confidence.label('category_confidence'),
+                ContentCategory.role.label('category_role'),
+                ContentCategory.source.label('category_source')
+            ).select_from(Content).join(
                 ContentCategory, Content.id == ContentCategory.content_id
             ).join(
                 Category, ContentCategory.category_id == Category.id
@@ -600,7 +640,7 @@ class SearchService:
             if query:
                 base_query = base_query.filter(
                     or_(
-                        Chunk.text.ilike(f"%{query}%"),
+                        Content.text.ilike(f"%{query}%"),
                         Content.title.ilike(f"%{query}%")
                     )
                 )
@@ -611,8 +651,29 @@ class SearchService:
                 desc(Content.created_at)
             ).limit(top_k).all()
             
-            # 格式化结果
-            formatted_results = self._format_search_results(results, query or "", "category")
+            # 格式化结果 - 使用新的Content级别格式化
+            formatted_results = []
+            for result in results:
+                content, category_name, category_color, category_confidence, category_role, category_source = result
+                
+                formatted_results.append({
+                    "score": 1.0,  # 按照分类查询，都是相关的
+                    "text": content.text[:500] if content.text else "",  # 前500字符作为摘要
+                    "title": content.title,
+                    "content_id": str(content.id),
+                    "chunk_id": str(content.id),  # 在分类查询中，使用content_id作为唯一标识
+                    "source_uri": content.source_uri,
+                    "modality": content.modality,
+                    "category": content.category,
+                    "category_name": category_name,
+                    "category_color": category_color,
+                    "category_confidence": float(category_confidence) if category_confidence else None,
+                    "category_role": category_role,
+                    "category_source": category_source,
+                    "tags": content.tags,
+                    "created_at": content.created_at.isoformat() if content.created_at else None,
+                    "match_type": "category"
+                })
             
             return {
                 "category": {

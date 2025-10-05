@@ -8,6 +8,14 @@ export interface QAMessage {
   content: string;
   timestamp: Date;
   isTyping?: boolean; // 用于打字机效果
+  sources?: Array<{  // 相关文档来源
+    title: string;
+    content_id: string;
+    category_name?: string;
+    confidence_percentage: number;
+    source_uri: string;
+    score: number;
+  }>;
 }
 
 export interface QASession {

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { 
   FileTextOutlined, 
   FileImageOutlined, 
@@ -17,6 +18,8 @@ interface DocumentItemProps {
 }
 
 export default function DocumentItem({ document, onClick }: DocumentItemProps) {
+  const [imageLoadError, setImageLoadError] = useState(false);
+  
   console.log('🚀 DocumentItem component loaded for:', document.title);
   console.log('📋 Document details:', {
     title: document.title,
@@ -102,7 +105,7 @@ export default function DocumentItem({ document, onClick }: DocumentItemProps) {
     if (document.modality === 'image') {
       const thumbnailUrl = getThumbnailUrl(document.source_uri);
       
-      if (thumbnailUrl) {
+      if (thumbnailUrl && !imageLoadError) {
         console.log(`🖼️ Attempting to load thumbnail: ${thumbnailUrl}`);
         return (
           <div style={{
@@ -119,32 +122,10 @@ export default function DocumentItem({ document, onClick }: DocumentItemProps) {
                 height: '100%',
                 objectFit: 'cover'
               }}
-              onError={(e) => {
-                // 如果真实缩略图加载失败，显示彩色渐变回退
+              onError={() => {
+                // 如果真实缩略图加载失败，设置状态触发重新渲染
                 console.log(`❌ Thumbnail failed to load: ${thumbnailUrl}`);
-                const target = e.target as HTMLImageElement;
-                const parent = target.parentElement;
-                if (parent) {
-                  parent.innerHTML = `
-                    <div style="
-                      width: 100%; 
-                      height: 100%; 
-                      display: flex; 
-                      align-items: center; 
-                      justify-content: center;
-                      background: linear-gradient(135deg, #FF6B6B, #4ECDC4);
-                      color: white;
-                      font-size: 24px;
-                      flex-direction: column;
-                      gap: 4px;
-                    ">
-                      <div style='font-size: 28px;'>🖼️</div>
-                      <div style='font-size: 8px; text-align: center; font-weight: 500; text-shadow: 0 1px 2px rgba(0,0,0,0.3); opacity: 0.9;'>
-                        ${document.title.split('.').pop()?.toUpperCase() || 'IMG'}
-                      </div>
-                    </div>
-                  `;
-                }
+                setImageLoadError(true);
               }}
               onLoad={() => {
                 console.log(`✅ Thumbnail loaded successfully: ${thumbnailUrl}`);

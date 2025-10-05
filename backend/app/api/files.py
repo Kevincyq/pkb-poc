@@ -12,12 +12,27 @@ from PIL import Image
 import io
 import hashlib
 import time
+import urllib.parse
 from sqlalchemy.orm import Session
 from app.db import SessionLocal
 from app.models import Content, Chunk, ContentCategory
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+def encode_filename_for_header(filename: str) -> str:
+    """
+    为HTTP头正确编码文件名，支持中文字符
+    使用RFC 5987标准: filename*=UTF-8''encoded_filename
+    """
+    try:
+        # 尝试ASCII编码（对于纯英文文件名）
+        filename.encode('ascii')
+        return f'filename="{filename}"'
+    except UnicodeEncodeError:
+        # 对于包含非ASCII字符的文件名，使用RFC 5987编码
+        encoded_filename = urllib.parse.quote(filename, safe='')
+        return f'filename*=UTF-8\'\'{encoded_filename}'
 
 def get_db():
     db = SessionLocal()
@@ -38,11 +53,84 @@ THUMBNAIL_DIR = Path("/tmp/pkb_thumbnails")
 THUMBNAIL_DIR.mkdir(exist_ok=True)
 
 def get_file_path(filename: str, db: Session) -> Path:
-    """获取文件的实际路径 - 简化版本，支持多个可能的存储位置"""
-    logger.info(f"Looking for file: {filename}")
+    """获取文件的实际路径 - 优化版本，支持原始文件名和存储文件名映射"""
+    logger.info(f"🔍 Looking for file: {filename}")
+    logger.info(f"🔍 Filename type: {type(filename)}, repr: {repr(filename)}")
     
     try:
-        # 可能的文件存储位置（优先查找持久化目录）
+        # URL解码文件名（处理前端传来的编码文件名）
+        import urllib.parse
+        decoded_filename = urllib.parse.unquote(filename)
+        logger.info(f"🔓 Decoded filename: {decoded_filename}")
+        logger.info(f"🔓 Decoded type: {type(decoded_filename)}, repr: {repr(decoded_filename)}")
+        
+        # 1. 优先通过数据库查找（支持原始文件名和存储文件名）
+        logger.info(f"🔍 Step 1: 尝试通过source_uri查找: webui://{filename}")
+        content = db.query(Content).filter(
+            Content.source_uri == f"webui://{filename}"
+        ).first()
+        
+        # 如果没找到，尝试解码后的文件名
+        if not content:
+            logger.info(f"🔍 Step 2: 尝试通过解码后的source_uri查找: webui://{decoded_filename}")
+            content = db.query(Content).filter(
+                Content.source_uri == f"webui://{decoded_filename}"
+            ).first()
+        
+        # 如果没找到，尝试通过原始文件名查找
+        if not content:
+            logger.info(f"🔍 Step 3: 尝试通过title查找: {filename}")
+            content = db.query(Content).filter(
+                Content.title == filename
+            ).first()
+            
+        # 如果没找到，尝试解码后的原始文件名
+        if not content:
+            logger.info(f"🔍 Step 4: 尝试通过解码后的title查找: {decoded_filename}")
+            content = db.query(Content).filter(
+                Content.title == decoded_filename
+            ).first()
+        
+        if content:
+            logger.info(f"✅ Found content in database: id={content.id}, title={content.title}, source_uri={content.source_uri}")
+            logger.info(f"📋 Content meta: {content.meta}")
+            
+            if content.meta and isinstance(content.meta, dict):
+                # 优先使用数据库中存储的文件路径
+                actual_path = content.meta.get('file_path')
+                if actual_path:
+                    file_path = Path(actual_path)
+                    logger.info(f"📂 Database file path: {actual_path}, exists: {file_path.exists()}")
+                    if file_path.exists():
+                        logger.info(f"✅ Found file via database file_path: {filename} -> {actual_path}")
+                        return file_path
+                    else:
+                        logger.warning(f"⚠️ Database file path does not exist: {actual_path}")
+            
+                # 如果数据库路径不存在，尝试使用存储文件名
+                stored_filename = content.meta.get('stored_filename')
+                if stored_filename:
+                    stored_path = Path("/app/uploads") / stored_filename
+                    logger.info(f"📂 Trying stored_filename: {stored_filename}, path: {stored_path}, exists: {stored_path.exists()}")
+                    if stored_path.exists():
+                        logger.info(f"✅ Found file via stored filename: {filename} -> {stored_path}")
+                        return stored_path
+            
+            # 如果前端传来的是原始文件名，但数据库中存储的是带时间戳的文件名
+            # 尝试通过source_uri获取实际的存储文件名
+            if content.source_uri and content.source_uri.startswith('webui://'):
+                actual_stored_filename = content.source_uri.replace('webui://', '')
+                stored_path = Path("/app/uploads") / actual_stored_filename
+                logger.info(f"📂 Trying source_uri filename: {actual_stored_filename}, path: {stored_path}, exists: {stored_path.exists()}")
+                if stored_path.exists():
+                    logger.info(f"✅ Found file via source_uri: {filename} -> {stored_path}")
+                    return stored_path
+                else:
+                    logger.warning(f"⚠️ Source URI file not found: {stored_path}")
+        else:
+            logger.warning(f"❌ No database record found for: {filename}")
+        
+        # 2. 尝试直接匹配文件名（备用方案）
         possible_locations = [
             Path("/app/uploads") / filename,
             Path("/data/uploads") / filename,
@@ -51,29 +139,10 @@ def get_file_path(filename: str, db: Session) -> Path:
             Path("/tmp/pkb_uploads") / filename,  # 临时目录放最后
         ]
         
-        # 1. 尝试直接匹配文件名
         for file_path in possible_locations:
             if file_path.exists():
                 logger.info(f"Found file via direct match: {filename} -> {file_path}")
                 return file_path
-        
-        # 2. 尝试通过数据库查找
-        content = db.query(Content).filter(
-            Content.source_uri == f"webui://{filename}"
-        ).first()
-        
-        if content and content.meta and isinstance(content.meta, dict):
-            actual_path = content.meta.get('file_path')
-            if actual_path:
-                file_path = Path(actual_path)
-                logger.info(f"Database file path: {actual_path}, exists: {file_path.exists()}")
-                if file_path.exists():
-                    logger.info(f"Found file via database: {filename} -> {actual_path}")
-                    return file_path
-                else:
-                    logger.warning(f"Database file path does not exist: {actual_path}")
-        else:
-            logger.info(f"No database record found for webui://{filename}")
         
         # 3. 尝试在各个目录中按文件名模糊匹配（而非仅按扩展名）
         target_name = Path(filename).stem.lower()  # 获取不带扩展名的文件名
@@ -273,22 +342,51 @@ async def get_file_thumbnail(filename: str, db: Session = Depends(get_db)):
         logger.error(f"Error getting thumbnail for {filename}: {e}")
         raise HTTPException(status_code=500, detail=f"获取缩略图失败: {str(e)}")
 
-@router.get("/raw/{filename}")
-async def get_raw_file(filename: str, db: Session = Depends(get_db)):
+@router.get("/{filename}")
+async def get_file(filename: str, db: Session = Depends(get_db)):
     """
-    获取原始文件
+    获取原始文件（用于预览和下载）
     """
     try:
+        logger.debug(f"🔍 Requesting file: {filename}")
         file_path = get_file_path(filename, db)
+        logger.debug(f"📁 Resolved file path: {file_path}")
         
         if not file_path.exists():
-            raise HTTPException(status_code=404, detail="文件不存在")
+            logger.error(f"File does not exist: {file_path}")
+            raise HTTPException(status_code=404, detail=f"文件不存在: {filename}")
+        
+        # 判断文件类型
+        file_extension = file_path.suffix.lower()
+        
+        # 根据文件类型设置media_type
+        media_type_map = {
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.png': 'image/png',
+            '.gif': 'image/gif',
+            '.bmp': 'image/bmp',
+            '.webp': 'image/webp',
+            '.pdf': 'application/pdf',
+            '.txt': 'text/plain',
+            '.md': 'text/markdown',
+            '.json': 'application/json',
+        }
+        
+        media_type = media_type_map.get(file_extension, 'application/octet-stream')
+        
+        # 🔥 修复中文文件名编码问题
+        content_disposition = f'inline; {encode_filename_for_header(filename)}'
+        logger.debug(f"📝 Content-Disposition: {content_disposition}")
+        logger.debug(f"🎯 Media type: {media_type}")
         
         return FileResponse(
             path=str(file_path),
+            media_type=media_type,
             filename=filename,
             headers={
-                "Cache-Control": "public, max-age=3600"
+                "Cache-Control": "public, max-age=3600",
+                "Content-Disposition": content_disposition
             }
         )
         
@@ -297,6 +395,13 @@ async def get_raw_file(filename: str, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error serving file {filename}: {e}")
         raise HTTPException(status_code=500, detail=f"获取文件失败: {str(e)}")
+
+@router.get("/raw/{filename}")
+async def get_raw_file(filename: str, db: Session = Depends(get_db)):
+    """
+    获取原始文件（兼容旧接口）
+    """
+    return await get_file(filename, db)
 
 # 公共函数，供其他模块调用
 def pregenerate_thumbnail_if_image(file_path: Path) -> bool:

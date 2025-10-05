@@ -40,12 +40,13 @@ class QuickClassificationService:
     def __init__(self, db: Session):
         self.db = db
     
-    def quick_classify(self, content_id: str) -> Dict[str, Any]:
+    def quick_classify(self, content_id: str, update_display: bool = True) -> Dict[str, Any]:
         """
         快速分类内容
         
         Args:
             content_id: 内容ID
+            update_display: 是否更新前端显示状态
             
         Returns:
             快速分类结果
@@ -72,9 +73,27 @@ class QuickClassificationService:
             ).first()
             
             if existing_classification:
+                # 即使已有分类，也要更新meta字段状态
+                if content.meta is None:
+                    content.meta = {}
+                
+                content.meta["classification_status"] = "quick_done"
+                if update_display:
+                    content.meta["show_classification"] = True
+                else:
+                    content.meta["show_classification"] = False
+                
+                # 标记meta字段为已修改，确保SQLAlchemy保存更改
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(content, 'meta')
+                
+                self.db.commit()
+                
+                logger.info(f"Updated meta for existing classification: content {content_id} (display: {update_display})")
+                
                 return {
                     "success": True,
-                    "message": "Content already has system classification",
+                    "message": "Content already has system classification, meta updated",
                     "category_id": str(existing_classification.category_id),
                     "is_quick": False
                 }
@@ -93,18 +112,49 @@ class QuickClassificationService:
             if not category:
                 return {"success": False, "error": f"Category not found: {classification_result['category']}"}
             
-            # 创建快速分类记录
-            content_category = ContentCategory(
-                content_id=content_uuid,
-                category_id=category.id,
-                confidence=classification_result["confidence"],
-                reasoning=f"快速分类: {classification_result.get('reasoning', '')}"
-            )
+            # 使用UPSERT逻辑：先查找现有记录，如果存在则更新，否则创建新记录
+            existing_classification = self.db.query(ContentCategory).filter(
+                ContentCategory.content_id == content_uuid,
+                ContentCategory.category_id == category.id
+            ).first()
             
-            self.db.add(content_category)
+            if existing_classification:
+                # 更新现有记录
+                existing_classification.confidence = classification_result["confidence"]
+                existing_classification.reasoning = f"快速分类: {classification_result.get('reasoning', '')}"
+                existing_classification.role = "primary_system"  # 系统主分类
+                existing_classification.source = "heuristic"     # 基于规则的快速分类
+                logger.info(f"Updated existing quick classification for content {content_uuid}")
+            else:
+                # 创建快速分类记录
+                content_category = ContentCategory(
+                    content_id=content_uuid,
+                    category_id=category.id,
+                    confidence=classification_result["confidence"],
+                    reasoning=f"快速分类: {classification_result.get('reasoning', '')}",
+                    role="primary_system",  # 系统主分类
+                    source="heuristic"      # 基于规则的快速分类
+                )
+                self.db.add(content_category)
+                logger.info(f"Created new quick classification for content {content_uuid}")
+            
+            # 更新Content的分类状态
+            if content.meta is None:
+                content.meta = {}
+            
+            content.meta["classification_status"] = "quick_done"
+            if update_display:
+                content.meta["show_classification"] = True
+            else:
+                content.meta["show_classification"] = False
+            
+            # 标记meta字段为已修改，确保SQLAlchemy保存更改
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(content, 'meta')
+            
             self.db.commit()
             
-            logger.info(f"Quick classified content {content_id} as {category.name}")
+            logger.info(f"Quick classified content {content_id} as {category.name} (display: {update_display})")
             
             return {
                 "success": True,
@@ -113,7 +163,8 @@ class QuickClassificationService:
                 "category_name": category.name,
                 "confidence": classification_result["confidence"],
                 "reasoning": classification_result.get("reasoning", ""),
-                "is_quick": True
+                "is_quick": True,
+                "display_updated": update_display
             }
             
         except Exception as e:
