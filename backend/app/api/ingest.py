@@ -12,6 +12,7 @@ import uuid
 from pathlib import Path
 from app.workers.tasks import ingest_file as ingest_task, generate_embeddings, simple_chunk, classify_content
 from app.parsers.document_processor import DocumentProcessor
+from app.utils.datetime_utils import serialize_datetime
 
 router = APIRouter()
 log = logging.getLogger(__name__)
@@ -72,7 +73,6 @@ def ingest_memo(item: dict, db: Session = Depends(get_db)):
     # 智能合集匹配 - 优先同步执行以确保立即生效
     try:
         from app.services.collection_matching_service import CollectionMatchingService
-from app.utils.datetime_utils import serialize_datetime
         matching_service = CollectionMatchingService(db)
         matched = matching_service.match_document_to_collections(str(content.id))
         log.info(f"Synchronously matched content {content.id} to {len(matched)} collections")
