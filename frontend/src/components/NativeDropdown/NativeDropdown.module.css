@@ -1,0 +1,48 @@
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.trigger {
+  cursor: pointer;
+  user-select: none;
+}
+
+.menu {
+  background: white;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 9px 28px 8px rgba(0, 0, 0, 0.05);
+  min-width: 120px;
+  padding: 4px 0;
+  margin-top: 4px;
+}
+
+.menuItem {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(0, 0, 0, 0.88);
+  transition: background-color 0.2s;
+}
+
+.menuItem:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+.menuItem:active {
+  background-color: rgba(0, 0, 0, 0.06);
+}
+
+/* 移动端优化 */
+@media (max-width: 768px) {
+  .menu {
+    min-width: 100px;
+    font-size: 16px; /* 移动端更大的字体 */
+  }
+  
+  .menuItem {
+    padding: 12px 16px; /* 移动端更大的点击区域 */
+  }
+}

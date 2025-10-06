@@ -1,0 +1,81 @@
+.tooltipContainer {
+  position: relative;
+  display: inline-block;
+}
+
+.trigger {
+  cursor: pointer;
+  user-select: none;
+}
+
+.tooltip {
+  background: rgba(0, 0, 0, 0.85);
+  color: white;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.4;
+  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 9px 28px 8px rgba(0, 0, 0, 0.05);
+  animation: fadeIn 0.2s ease-in-out;
+}
+
+.tooltipContent {
+  position: relative;
+  z-index: 1;
+}
+
+.tooltipArrow {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border: 4px solid transparent;
+}
+
+/* 箭头位置 - 根据 placement 调整 */
+.tooltip[style*="bottom: 100%"] .tooltipArrow {
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-top-color: rgba(0, 0, 0, 0.85);
+}
+
+.tooltip[style*="top: 100%"] .tooltipArrow {
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-bottom-color: rgba(0, 0, 0, 0.85);
+}
+
+.tooltip[style*="right: 100%"] .tooltipArrow {
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  border-left-color: rgba(0, 0, 0, 0.85);
+}
+
+.tooltip[style*="left: 100%"] .tooltipArrow {
+  right: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  border-right-color: rgba(0, 0, 0, 0.85);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 移动端优化 */
+@media (max-width: 768px) {
+  .tooltip {
+    font-size: 11px;
+    padding: 8px 12px;
+    max-width: 300px !important;
+  }
+}

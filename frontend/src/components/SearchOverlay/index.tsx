@@ -49,11 +49,29 @@ export default function SearchOverlay({ visible, onClose }: SearchOverlayProps) 
 
   // 处理外部点击关闭
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (overlayRef.current && !overlayRef.current.contains(event.target as Node)) {
-        onClose();
-      }
-    };
+  const handleClickOutside = (event: MouseEvent) => {
+    const target = event.target as HTMLElement;
+    
+    // 如果点击的是 Dropdown 相关元素，不要关闭搜索覆盖层
+    if (target.closest('.ant-dropdown') || 
+        target.closest('.ant-dropdown-menu') ||
+        target.closest('[data-testid*="more-button"]') ||
+        target.closest('.ant-dropdown-trigger')) {
+      return;
+    }
+    
+    // 如果点击的是 Tooltip 相关元素，不要关闭搜索覆盖层
+    if (target.closest('.ant-tooltip') || 
+        target.closest('.ant-tooltip-content') ||
+        target.closest('.ant-tooltip-inner') ||
+        target.closest('[role="tooltip"]')) {
+      return;
+    }
+    
+    if (overlayRef.current && !overlayRef.current.contains(target)) {
+      onClose();
+    }
+  };
 
     if (visible) {
       document.addEventListener('mousedown', handleClickOutside);

@@ -1,0 +1,111 @@
+.previewContainer {
+  text-align: center;
+  max-width: 100%;
+}
+
+.imageContainer {
+  position: relative;
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fafafa;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.loadingContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+}
+
+.previewImage {
+  max-width: 100%;
+  max-height: 70vh;
+  min-height: 400px;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transition: opacity 0.3s ease;
+}
+
+.errorContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  color: #666;
+}
+
+.errorIcon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.nonImageContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  background: #fafafa;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  color: #666;
+}
+
+.fileIcon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+
+.infoContainer {
+  text-align: left;
+  color: #666;
+  background: #f9f9f9;
+  padding: 16px;
+  border-radius: 8px;
+  margin-top: 16px;
+}
+
+.infoContainer p {
+  margin: 8px 0;
+  line-height: 1.5;
+}
+
+.infoContainer strong {
+  color: #333;
+  margin-right: 8px;
+}
+
+/* 移动端优化 */
+@media (max-width: 768px) {
+  .previewImage {
+    max-height: 50vh;
+    min-height: 250px;
+  }
+  
+  .loadingContainer,
+  .errorContainer {
+    min-height: 250px;
+  }
+  
+  .nonImageContainer {
+    min-height: 200px;
+  }
+  
+  .fileIcon {
+    font-size: 48px;
+  }
+  
+  .infoContainer {
+    padding: 12px;
+    font-size: 14px;
+  }
+}

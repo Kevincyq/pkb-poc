@@ -1,4 +1,5 @@
-import { Card, Tag, Dropdown, Button, message } from 'antd';
+import { Card, Tag, Button, message } from 'antd';
+import NativeDropdown from '../NativeDropdown';
 import { 
   FileTextOutlined, 
   FileImageOutlined, 
@@ -13,7 +14,7 @@ import {
   DeleteOutlined,
   EyeOutlined
 } from '@ant-design/icons';
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import api from '../../services/api';
 import styles from './DocumentCard.module.css';
 import { formatDate } from '../../utils/dateUtils';
@@ -39,7 +40,7 @@ interface DocumentCardProps {
   isHighlighted?: boolean; // 新增：是否高亮显示
 }
 
-export default function DocumentCard({
+function DocumentCard({
   id,
   title,
   modality,
@@ -365,20 +366,20 @@ export default function DocumentCard({
   console.log('🔧 Final thumbnail element:', thumbnailElement);
 
   return (
-    <div style={{ position: 'relative', width: '100%', maxWidth: '100%', overflow: 'hidden' }}>
-      <Card 
-        onClick={(e) => {
-          // 检查点击是否来自More按钮区域
-          const target = e.target as HTMLElement;
-          const moreButton = e.currentTarget.querySelector('.ant-dropdown-trigger');
-          if (moreButton && (moreButton.contains(target) || moreButton === target)) {
-            // 如果点击的是More按钮区域，不触发预览
-            return;
-          }
-          handlePreview();
-        }}
+    <div style={{ position: 'relative', width: '100%', maxWidth: '100%', overflow: 'visible' }}>
+      <Card
         hoverable
-        cover={thumbnailElement}
+        cover={
+          <div 
+            style={{ cursor: 'pointer' }}
+            onClick={(e) => {
+              console.log('🎯 Document thumbnail clicked, triggering preview');
+              handlePreview();
+            }}
+          >
+            {thumbnailElement}
+          </div>
+        }
         className={styles.documentCard}
         style={{
           boxShadow: isHighlighted 
@@ -397,7 +398,14 @@ export default function DocumentCard({
         }}
       >
       <div>
-        <h4 className={styles.documentTitle}>
+        <h4 
+          className={styles.documentTitle}
+          style={{ cursor: 'pointer' }}
+          onClick={(e) => {
+            console.log('🎯 Document title clicked, triggering preview');
+            handlePreview();
+          }}
+        >
           {title}
         </h4>
         <div className={styles.documentMeta}>
@@ -466,42 +474,62 @@ export default function DocumentCard({
       </Card>
       
       {/* 右上角操作按钮 */}
-      <Dropdown
-        menu={{ 
-          items: menuItems,
-          onClick: (info) => {
-            console.log('🎯 Dropdown menu onClick triggered:', info);
-            handleMenuClick(info);
-          }
-        }}
-        placement="bottomRight"
-        trigger={['click']}
-        onOpenChange={(open) => {
-          console.log('🎯 Dropdown open state changed:', open);
-        }}
-        // 防止Dropdown容器的点击事件冒泡
-        onClick={(e) => {
-          console.log('🎯 Dropdown container clicked');
-          e.stopPropagation();
+      <div 
+        style={{
+          position: 'absolute',
+          top: '8px',
+          right: '8px',
         }}
       >
-        <Button
-          type="text"
-          icon={<MoreOutlined />}
-          size="small"
-          onClick={(e) => {
-            console.log('🎯 More button clicked');
-            e.stopPropagation();
+        <NativeDropdown
+          items={menuItems}
+          placement="bottomRight"
+          onMenuClick={(key) => {
+            handleMenuClick({ key });
           }}
-          className={styles.moreButton}
-          onMouseEnter={(e) => {
-            (e.target as HTMLElement).style.opacity = '1';
-          }}
-          onMouseLeave={(e) => {
-            (e.target as HTMLElement).style.opacity = '0.8';
-          }}
+          trigger={
+            <div
+              data-testid="document-more-button"
+              className={styles.moreButton}
+              style={{
+                background: 'rgba(0, 0, 0, 0.6)',
+                color: 'white',
+                borderRadius: '4px',
+                opacity: 0.8,
+                padding: '4px 8px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '14px',
+                transition: 'opacity 0.2s'
+              }}
+              onMouseEnter={(e) => {
+                (e.target as HTMLElement).style.opacity = '1';
+              }}
+              onMouseLeave={(e) => {
+                (e.target as HTMLElement).style.opacity = '0.8';
+              }}
+            >
+              <MoreOutlined />
+            </div>
+          }
         />
-      </Dropdown>
+      </div>
     </div>
   );
 }
+
+// 使用 memo 优化组件，避免不必要的重新渲染
+export default memo(DocumentCard, (prevProps, nextProps) => {
+  // 自定义比较函数，只有关键属性变化时才重新渲染
+  return (
+    prevProps.id === nextProps.id &&
+    prevProps.title === nextProps.title &&
+    prevProps.modality === nextProps.modality &&
+    prevProps.sourceUri === nextProps.sourceUri &&
+    prevProps.createdAt === nextProps.createdAt &&
+    prevProps.isHighlighted === nextProps.isHighlighted &&
+    JSON.stringify(prevProps.categories) === JSON.stringify(nextProps.categories)
+  );
+});

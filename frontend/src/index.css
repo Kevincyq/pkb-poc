@@ -10,6 +10,15 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* 全局Dropdown和Tooltip层级设置 */
+.ant-dropdown {
+  z-index: 1200 !important; /* 确保Dropdown在最顶层 */
+}
+
+.ant-tooltip {
+  z-index: 1200 !important; /* 确保Tooltip在最顶层 */
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -45,7 +54,7 @@ pre, code {
   min-width: 0;
   overflow-wrap: break-word;
   max-width: 100%;
-  overflow-x: hidden; /* 只隐藏横向溢出，保留纵向以支持Dropdown */
+  /* 移除 overflow-x: hidden 以允许 Dropdown 菜单正常显示 */
 }
 
 /* 防止卡片被长文件名撑宽 */
@@ -53,7 +62,7 @@ pre, code {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  overflow-x: hidden; /* 只隐藏横向溢出，保留纵向以支持Dropdown */
+  /* 移除 overflow-x: hidden 以允许 Dropdown 菜单正常显示 */
 }
 
 .ant-card-body {

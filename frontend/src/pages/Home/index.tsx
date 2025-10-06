@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Row, Col, Button, message, Upload, Modal, Input, Drawer, Select, Slider, Tag, Progress, Tooltip } from 'antd';
+import { Row, Col, Button, message, Upload, Modal, Input, Drawer, Select, Slider, Tag, Progress } from 'antd';
+import NativeTooltip from '../../components/NativeTooltip';
 import { SearchOutlined, PlusOutlined, FileTextOutlined, FilterOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
@@ -854,20 +855,40 @@ export default function Home() {
               }}
             />
           </Upload>
-          <Tooltip 
+          <NativeTooltip 
             title={
-              <div style={{ fontSize: '12px', lineHeight: '1.4' }}>
-                <div style={{ fontWeight: 'bold', marginBottom: '4px', color: '#1890ff' }}>📁 文件上传限制 (MVP版本)</div>
-                <div style={{ marginBottom: '2px' }}>✅ 支持格式：.txt, .md, .pdf</div>
-                <div style={{ marginBottom: '2px' }}>✅ 支持图片：.jpg, .jpeg, .png, .gif, .bmp, .webp</div>
-                <div style={{ marginBottom: '2px' }}>❌ 暂不支持：Office文档(.doc, .xls, .ppt等)</div>
-                <div style={{ marginBottom: '2px' }}>📏 单文件大小：≤ 20MB</div>
-                <div style={{ marginBottom: '2px' }}>📦 批量上传：≤ 5个文件</div>
-                <div style={{ color: '#52c41a' }}>💡 小文件处理更快，体验更佳</div>
+              <div style={{ fontSize: '12px', lineHeight: '1.5', minWidth: '270px', width: '270px' }}>
+                <div style={{ 
+                  fontWeight: 'bold', 
+                  marginBottom: '8px', 
+                  color: '#1890ff',
+                  textAlign: 'left',
+                  borderBottom: '1px solid rgba(255,255,255,0.2)',
+                  paddingBottom: '6px'
+                }}>
+                  📁 文件上传限制 (MVP版本)
+                </div>
+                
+                <div style={{ marginBottom: '5px' }}>✅ 支持格式：.txt, .md, .pdf</div>
+                <div style={{ marginBottom: '5px' }}>✅ 支持图片：.jpg, .jpeg, .png, .gif, .bmp, .webp</div>
+                <div style={{ marginBottom: '5px' }}>❌ 暂不支持：Office文档(.doc, .xls, .ppt等)</div>
+                <div style={{ marginBottom: '5px' }}>📏 单文件大小：≤ 20MB</div>
+                <div style={{ marginBottom: '8px' }}>📦 批量上传：≤ 5个文件</div>
+                
+                <div style={{ 
+                  borderTop: '1px solid rgba(255,255,255,0.2)',
+                  paddingTop: '6px',
+                  color: '#52c41a',
+                  textAlign: 'left',
+                  fontSize: '11px'
+                }}>
+                  💡 小文件处理更快，体验更佳
+                </div>
               </div>
             }
             placement="bottomRight"
-            overlayStyle={{ maxWidth: '280px' }}
+            trigger={['hover', 'click']}
+            maxWidth="350px"
           >
             <Button
               type="text"
@@ -882,7 +903,7 @@ export default function Home() {
                 marginLeft: '4px'
               }}
             />
-          </Tooltip>
+          </NativeTooltip>
         </div>
       </div>
 

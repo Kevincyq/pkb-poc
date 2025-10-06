@@ -201,6 +201,13 @@
     user-select: none;
   }
   
+  /* 确保 Dropdown 相关元素可以正常交互 */
+  .ant-dropdown, .ant-dropdown-menu, .ant-dropdown-menu-item {
+    -webkit-user-select: auto !important;
+    user-select: auto !important;
+    pointer-events: auto !important;
+  }
+  
   /* 触摸反馈 */
   .ant-btn:active, .ant-card:active, button:active {
     transform: scale(0.98);
