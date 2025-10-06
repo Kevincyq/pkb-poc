@@ -15,7 +15,7 @@ class Content(Base):
     title      = Column(String, nullable=False)
     text       = Column(Text, nullable=False)       # 纯文本（OCR/ASR 后）
     summary    = Column(Text, nullable=True)        # AI 生成的摘要
-    tags       = Column(JSON, nullable=True)        # AI 生成的标签
+    legacy_tags = Column("tags", JSON, nullable=True)  # AI 生成的标签（重命名避免与@property冲突）
     category   = Column(String, nullable=True)      # AI 生成的分类
     meta       = Column(JSON, nullable=True)        # {people, project, topics, ...}
     

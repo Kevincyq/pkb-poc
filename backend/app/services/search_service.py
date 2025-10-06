@@ -219,7 +219,7 @@ class SearchService:
                     contents.source_uri,
                     contents.modality,
                     contents.category,
-                    contents.tags,
+                    contents.legacy_tags as tags,
                     contents.created_at,
                     categories.name as category_name,
                     categories.color as category_color,
