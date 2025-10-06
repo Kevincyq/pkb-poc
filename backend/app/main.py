@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request
-from app.api import ingest, search, operator, qa, agent, document, embedding, category, collection, files
+from app.api import ingest, search, operator, qa, agent, document, embedding, category, collection, files, files_improved
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from app.db import engine, Base
@@ -112,6 +112,7 @@ app.include_router(embedding.router, prefix="/api/embedding", tags=["embedding"]
 app.include_router(category.router, prefix="/api/category", tags=["category"])
 app.include_router(collection.router, prefix="/api/collection", tags=["collection"])
 app.include_router(files.router, prefix="/api/files", tags=["files"])
+app.include_router(files_improved.router, prefix="/api/files_improved", tags=["files_improved"])
 app.include_router(operator.router, prefix="/api/operator", tags=["operator"])
 
 @app.get("/", include_in_schema=False)
