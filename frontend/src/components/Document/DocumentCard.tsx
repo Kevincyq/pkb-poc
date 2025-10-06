@@ -15,6 +15,7 @@ import {
 } from '@ant-design/icons';
 import { useState } from 'react';
 import api from '../../services/api';
+import styles from './DocumentCard.module.css';
 
 interface DocumentCardProps {
   id: string;
@@ -190,20 +191,11 @@ export default function DocumentCard({
       
       if (thumbnailUrl && !thumbnailError) {
         return (
-          <div style={{
-            width: '100%',
-            height: '180px', // 增加缩略图高度
-            position: 'relative',
-            backgroundColor: '#f5f5f5'
-          }}>
+          <div className={styles.documentThumbnail}>
             <img 
               src={thumbnailUrl} 
               alt={title} 
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover'
-              }}
+              className={styles.documentImage}
               onError={() => {
                 console.log(`❌ Thumbnail failed to load: ${thumbnailUrl}`);
                 setThumbnailError(true);
@@ -220,12 +212,7 @@ export default function DocumentCard({
         
         if (colorStyle) {
           return (
-            <div style={{
-              width: '100%',
-              height: '180px', // 增加缩略图高度
-              position: 'relative',
-              ...colorStyle
-            }}>
+            <div className={styles.documentThumbnail} style={colorStyle}>
               <div style={{
                 display: 'flex',
                 flexDirection: 'column',
@@ -267,30 +254,28 @@ export default function DocumentCard({
     console.log(`🎨 Using color pair for ${title}:`, colorPair);
     
     return (
-      <div style={{
-        width: '100%',
-        height: '180px', // 统一缩略图高度
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: `linear-gradient(135deg, ${colorPair[0]}, ${colorPair[1]})`,
-        flexDirection: 'column',
-        gap: '12px'
-      }}>
-        <IconComponent style={{ 
-          fontSize: '48px', 
-          color: 'white',
-          filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))'
-        }} />
-        <div style={{
-          fontSize: '12px',
-          color: 'white',
-          textAlign: 'center',
-          padding: '0 8px',
-          fontWeight: '500',
-          textShadow: '0 1px 2px rgba(0,0,0,0.3)'
-        }}>
-          {fileTypeInfo.displayName}
+      <div 
+        className={styles.documentThumbnail}
+        style={{
+          background: `linear-gradient(135deg, ${colorPair[0]}, ${colorPair[1]})`
+        }}
+      >
+        <div className={styles.documentIcon}>
+          <IconComponent style={{ 
+            fontSize: '48px', 
+            color: 'white',
+            filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))'
+          }} />
+          <div style={{
+            fontSize: '12px',
+            color: 'white',
+            textAlign: 'center',
+            padding: '0 8px',
+            fontWeight: '500',
+            textShadow: '0 1px 2px rgba(0,0,0,0.3)'
+          }}>
+            {fileTypeInfo.displayName}
+          </div>
         </div>
       </div>
     );
@@ -394,18 +379,12 @@ export default function DocumentCard({
         onClick={handlePreview}
         hoverable
         cover={thumbnailElement}
+        className={styles.documentCard}
         style={{
-          width: '100%',
-          height: '300px', // 固定卡片总高度 (180px缩略图 + 120px内容区域)
-          borderRadius: '8px',
-          overflow: 'hidden',
           boxShadow: isHighlighted 
             ? '0 0 0 2px #1890ff, 0 4px 12px rgba(24, 144, 255, 0.3)' 
             : '0 1px 3px rgba(0, 0, 0, 0.1)',
-          transition: 'all 0.3s',
           opacity: isDeleting ? 0.6 : 1,
-          display: 'flex',
-          flexDirection: 'column',
           border: isHighlighted ? '2px solid #1890ff' : undefined,
           backgroundColor: isHighlighted ? '#f6ffed' : undefined
         }}
@@ -418,33 +397,13 @@ export default function DocumentCard({
         }}
       >
       <div>
-        <h4 style={{
-          fontSize: '14px',
-          fontWeight: '500',
-          color: '#333',
-          margin: '0 0 8px 0',
-          lineHeight: '1.3',
-          height: '36px', // 固定标题区域高度 (14px * 1.3 * 2 ≈ 36px)
-          display: '-webkit-box',
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis'
-        }}>
+        <h4 className={styles.documentTitle}>
           {title}
         </h4>
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '8px'
-        }}>
+        <div className={styles.documentMeta}>
           {/* 分类标签 */}
           {categories && categories.length > 0 && (
-            <div style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '4px'
-            }}>
+            <div className={styles.documentCategories}>
               {categories.map((category) => {
                 // 根据角色确定样式
                 const isPrimary = category.role === 'primary_system';
@@ -493,11 +452,7 @@ export default function DocumentCard({
           )}
           
           {/* 来源和时间 */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-          }}>
+          <div className={styles.documentFooter}>
             <Tag color={sourceTag.color}>{sourceTag.text}</Tag>
             <span style={{
               fontSize: '12px',
@@ -533,18 +488,7 @@ export default function DocumentCard({
             console.log('🎯 More button clicked');
             e.stopPropagation();
           }}
-          style={{
-            position: 'absolute',
-            top: '8px',
-            right: '8px',
-            background: 'rgba(0, 0, 0, 0.6)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            zIndex: 10,
-            opacity: 0.8,
-            transition: 'opacity 0.3s'
-          }}
+          className={styles.moreButton}
           onMouseEnter={(e) => {
             (e.target as HTMLElement).style.opacity = '1';
           }}

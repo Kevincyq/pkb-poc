@@ -98,59 +98,78 @@
 @media (max-width: 768px) {
   .collectionCard {
     min-height: 200px;
+    width: 100%;
+    max-width: 100%;
   }
   
   .createCard {
     min-height: 200px;
+    width: 100%;
+    max-width: 100%;
   }
   
   .titleText {
     font-size: 15px;
     font-weight: 600;
+    word-break: break-word; /* 长文件名自动换行 */
   }
   
   .imageArea {
     height: 120px;
+    width: 100%;
+  }
+  
+  .cardImage {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
   
   .customIconArea {
     font-size: 28px;
     padding: 30px 0;
+    width: 100%;
   }
   
   .cardFooter {
     font-size: 13px;
-    padding: 10px 16px;
+    padding: 10px 12px;
   }
   
   .customCardFooter {
     font-size: 13px;
-    padding: 14px 16px;
-  }
-  
-  /* 增加触摸区域 */
-  .collectionCard {
-    min-height: 44px;
+    padding: 14px 12px;
   }
 }
 
 /* 超小屏幕适配 */
 @media (max-width: 480px) {
+  .collectionCard,
+  .createCard {
+    min-height: 180px;
+    width: 100%;
+    max-width: 100%;
+  }
+  
   .titleText {
     font-size: 14px;
+    line-height: 1.4;
   }
   
   .imageArea {
     height: 100px;
+    width: 100%;
   }
   
   .customIconArea {
     font-size: 24px;
     padding: 25px 0;
+    width: 100%;
   }
   
   .cardFooter,
   .customCardFooter {
     font-size: 12px;
+    padding: 8px 10px;
   }
 }

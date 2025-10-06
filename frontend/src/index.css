@@ -16,9 +16,40 @@
   box-sizing: border-box;
 }
 
+/* 边界情况处理 */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* 防止内容溢出 */
+pre, code {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+/* 长文本处理 */
+.ant-typography, .ant-card-meta-title, .ant-card-meta-description {
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+/* 表格响应式 */
+.ant-table-wrapper {
+  overflow-x: auto;
+}
+
+/* 防止flex子元素溢出 */
+.ant-col, [class*="col-"] {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
 html, body {
   height: 100%;
   background-color: #ffffff;
+  overflow-x: hidden; /* 防止横向滚动 */
 }
 
 body {
@@ -26,11 +57,14 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background-color: #ffffff;
+  max-width: 100vw; /* 确保不超过视口宽度 */
 }
 
 #root {
   min-height: 100vh;
   background-color: #ffffff;
+  max-width: 100vw; /* 确保不超过视口宽度 */
+  overflow-x: hidden; /* 防止横向滚动 */
 }
 
 a {

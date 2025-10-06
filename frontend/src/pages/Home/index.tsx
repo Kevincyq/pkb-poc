@@ -904,7 +904,7 @@ export default function Home() {
             加载失败，请刷新重试
           </div>
         ) : (
-          <Row gutter={[16, 16]}>
+          <Row gutter={[12, 12]}>
             {/* Create Card */}
             <Col xs={12} sm={8} md={6} lg={4} xl={4}>
               <CollectionCard

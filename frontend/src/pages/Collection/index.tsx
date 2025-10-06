@@ -41,7 +41,7 @@ export default function Collection() {
   return (
     <MainLayout>
       {/* 顶部导航栏 */}
-      <div style={{ 
+      <div className="collection-header" style={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center', 
@@ -63,7 +63,7 @@ export default function Collection() {
         </div>
         
         {/* 右侧操作区 */}
-        <Space size={16}>
+        <Space className="collection-actions" size={16}>
           <Search onSearch={handleSearch} />
           <Button 
             type="text" 
@@ -102,11 +102,11 @@ export default function Collection() {
                 <div style={{ marginBottom: '16px', fontSize: '14px', color: '#666' }}>
                   显示 {data.results.length} 条内容 (API返回: {data.total || 'unknown'} 条)
                 </div>
-                <Row gutter={[16, 16]}>
+                <Row gutter={[12, 12]}>
                 {data.results.map((document: CollectionDocument) => {
                   console.log('📋 Rendering document:', document.title, 'modality:', document.modality, 'sourceUri:', document.source_uri);
                   return (
-                    <Col xs={24} sm={12} md={8} lg={6} xl={4} key={document.chunk_id || document.content_id}>
+                    <Col xs={12} sm={8} md={6} lg={4} xl={4} key={document.chunk_id || document.content_id}>
                       <DocumentCard
                         id={document.chunk_id || document.content_id}
                         title={document.title}

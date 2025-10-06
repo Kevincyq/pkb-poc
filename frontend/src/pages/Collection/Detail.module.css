@@ -19,7 +19,7 @@
 }
 
 /* 移动端：2列 */
-@media (max-width: 767px) {
+@media (max-width: 768px) {
   .documentGrid {
     grid-template-columns: repeat(2, 1fr);
     gap: 12px;
@@ -33,7 +33,7 @@
   padding: 24px;
 }
 
-@media (max-width: 767px) {
+@media (max-width: 768px) {
   .container {
     padding: 16px;
   }

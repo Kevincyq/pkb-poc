@@ -7,6 +7,7 @@ import {
   ExclamationCircleOutlined,
   EyeOutlined 
 } from '@ant-design/icons';
+import styles from './UploadStatusCard.module.css';
 
 const { Text } = Typography;
 
@@ -129,19 +130,19 @@ const UploadStatusCard: React.FC<UploadStatusCardProps> = ({
   return (
     <Card 
       size="small" 
+      className={styles.uploadCard}
       style={{ 
-        marginBottom: 12,
         border: file.status === 'error' ? '1px solid #ff4d4f' : undefined
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+      <div className={styles.uploadContent}>
         {/* 文件图标 */}
-        <div style={{ fontSize: 24, marginTop: 4 }}>
+        <div className={styles.uploadIcon}>
           {getStatusIcon()}
         </div>
 
         {/* 文件信息 */}
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div className={styles.uploadInfo}>
           {/* 文件名和大小 */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
             <Text strong style={{ fontSize: 14 }} ellipsis={{ tooltip: file.fileName }}>

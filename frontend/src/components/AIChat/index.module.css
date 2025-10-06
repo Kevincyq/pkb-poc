@@ -119,3 +119,67 @@
   justify-content: center;
   color: #1677ff;
 }
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .container {
+    bottom: 16px;
+    width: 95%;
+    border-radius: 8px;
+  }
+  
+  .header {
+    padding: 10px 12px;
+  }
+  
+  .header span {
+    font-size: 13px;
+  }
+  
+  .messages {
+    padding: 12px;
+    max-height: 300px;
+    gap: 12px;
+  }
+  
+  .question, .answer {
+    max-width: 90%;
+    padding: 10px;
+    font-size: 14px;
+  }
+  
+  .inputArea {
+    padding: 12px;
+  }
+  
+  .inputArea :global(.ant-input) {
+    font-size: 16px; /* 防止iOS缩放 */
+    padding: 10px 12px;
+  }
+  
+  .inputArea :global(.ant-input-suffix) button {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    width: 98%;
+    bottom: 12px;
+  }
+  
+  .messages {
+    max-height: 250px;
+    padding: 10px;
+  }
+  
+  .question, .answer {
+    padding: 8px;
+    font-size: 13px;
+  }
+  
+  .inputArea {
+    padding: 10px;
+  }
+}
