@@ -6,6 +6,7 @@ import router from './router';
 import './index.css';
 import './styles/mobile.css';
 
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
