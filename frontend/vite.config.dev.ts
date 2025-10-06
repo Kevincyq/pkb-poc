@@ -7,6 +7,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,  // 匹配实际端口
+    
     proxy: {
       '/api': {
         target: 'https://pkb.kmchat.cloud',
