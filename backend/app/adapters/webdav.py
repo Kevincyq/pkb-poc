@@ -26,7 +26,21 @@ def list_webdav(url: str) -> list[dict]:
     </d:propfind>"""
     resp = requests.request("PROPFIND", url, data=body, headers=headers, auth=(NC_USER, NC_PASS))
     resp.raise_for_status()
-    root = etree.fromstring(resp.content)
+    
+    # 🔥 修复：处理Nextcloud返回的XML格式问题
+    try:
+        root = etree.fromstring(resp.content)
+    except etree.XMLSyntaxError as e:
+        logger.warning(f"XML parsing error from WebDAV response: {e}")
+        # 尝试清理XML内容
+        xml_content = resp.content.decode('utf-8', errors='ignore')
+        # 移除可能有问题的defer属性
+        xml_content = xml_content.replace(' defer=""', '').replace(' defer=', ' defer="true"')
+        try:
+            root = etree.fromstring(xml_content.encode('utf-8'))
+        except etree.XMLSyntaxError as e2:
+            logger.error(f"Failed to parse WebDAV XML even after cleanup: {e2}")
+            return []
     ns = {"d": "DAV:"}
     items = []
     for resp_el in root.findall("d:response", ns):
