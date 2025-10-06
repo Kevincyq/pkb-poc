@@ -1,13 +1,15 @@
 /* DocumentCard 移动端响应式样式 */
 
 .documentCard {
-  width: 100%;
+  width: 100% !important;
+  max-width: 100% !important;
   height: 300px;
   border-radius: 8px;
   overflow: hidden;
   transition: all 0.3s;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
 }
 
 .documentCardBody {
@@ -30,6 +32,9 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
+  word-break: break-all;
+  overflow-wrap: break-word;
+  max-width: 100%;
 }
 
 .documentThumbnail {

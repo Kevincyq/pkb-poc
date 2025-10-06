@@ -44,6 +44,26 @@ pre, code {
 .ant-col, [class*="col-"] {
   min-width: 0;
   overflow-wrap: break-word;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* 防止卡片被长文件名撑宽 */
+.ant-card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.ant-card-body {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.ant-card-meta-title {
+  word-break: break-all;
+  overflow-wrap: break-word;
 }
 
 html, body {

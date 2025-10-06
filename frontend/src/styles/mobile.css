@@ -45,6 +45,9 @@
   .ant-col {
     padding-left: 6px !important;
     padding-right: 6px !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
   }
   
   /* 抽屉和弹窗 */
@@ -302,4 +305,27 @@
 /* 暗色模式支持（预留） */
 @media (prefers-color-scheme: dark) {
   /* 暗色模式样式可以在这里添加 */
+}
+
+/* 长文件名处理 - 全局强制断行 */
+h1, h2, h3, h4, h5, h6, 
+.ant-card-meta-title, 
+.ant-typography-title,
+[class*="title"], 
+[class*="Title"] {
+  word-break: break-all !important;
+  overflow-wrap: break-word !important;
+  hyphens: auto;
+}
+
+/* 特别针对卡片标题 */
+.ant-card .ant-card-body h1,
+.ant-card .ant-card-body h2,
+.ant-card .ant-card-body h3,
+.ant-card .ant-card-body h4,
+.ant-card .ant-card-body h5,
+.ant-card .ant-card-body h6 {
+  max-width: 100% !important;
+  word-break: break-all !important;
+  overflow-wrap: break-word !important;
 }

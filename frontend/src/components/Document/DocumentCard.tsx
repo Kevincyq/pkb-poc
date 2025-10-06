@@ -16,6 +16,7 @@ import {
 import { useState } from 'react';
 import api from '../../services/api';
 import styles from './DocumentCard.module.css';
+import { formatDate } from '../../utils/dateUtils';
 
 interface DocumentCardProps {
   id: string;
@@ -330,16 +331,6 @@ export default function DocumentCard({
     onClick?.();
   };
 
-  // 格式化日期 - 始终显示完整日期
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    
-    // 始终显示年/月/日格式
-    return `${year}/${month}/${day}`;
-  };
 
   // 右下角操作菜单
   const menuItems = [
@@ -374,7 +365,7 @@ export default function DocumentCard({
   console.log('🔧 Final thumbnail element:', thumbnailElement);
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative', width: '100%', maxWidth: '100%', overflow: 'hidden' }}>
       <Card 
         onClick={handlePreview}
         hoverable

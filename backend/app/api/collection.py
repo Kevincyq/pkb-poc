@@ -14,6 +14,7 @@ import logging
 from app.db import SessionLocal
 from app.models import Collection, Category, Content, ContentCategory, Chunk
 from app.services.collection_matching_service import CollectionMatchingService
+from app.utils.datetime_utils import serialize_datetime
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -67,8 +68,8 @@ def get_collections(db: Session = Depends(get_db)):
                     name=collection.name,
                     description=collection.description,
                     content_count=0,  # 没有category_id的合集内容为0
-                    created_at=collection.created_at.isoformat() if collection.created_at else "",
-                    updated_at=collection.updated_at.isoformat() if collection.updated_at else ""
+                    created_at=serialize_datetime(collection.created_at) or "",
+                    updated_at=serialize_datetime(collection.updated_at) or ""
                 ))
                 continue
             
@@ -88,8 +89,8 @@ def get_collections(db: Session = Depends(get_db)):
                 name=collection.name,
                 description=collection.description,
                 content_count=content_count,
-                created_at=collection.created_at.isoformat() if collection.created_at else "",
-                updated_at=collection.updated_at.isoformat() if collection.updated_at else ""
+                created_at=serialize_datetime(collection.created_at) or "",
+                updated_at=serialize_datetime(collection.updated_at) or ""
             ))
         
         # 清理无效的合集
@@ -190,8 +191,8 @@ def create_collection(collection_data: CollectionCreate, db: Session = Depends(g
             name=collection.name,
             description=collection.description,
             content_count=matched_count,  # 显示匹配的文档数
-            created_at=collection.created_at.isoformat() if collection.created_at else "",
-            updated_at=collection.updated_at.isoformat() if collection.updated_at else ""
+            created_at=serialize_datetime(collection.created_at) or "",
+            updated_at=serialize_datetime(collection.updated_at) or ""
         )
         
     except HTTPException:
@@ -310,8 +311,8 @@ def update_collection(
             name=collection.name,
             description=collection.description,
             content_count=content_count,
-            created_at=collection.created_at.isoformat() if collection.created_at else "",
-            updated_at=collection.updated_at.isoformat() if collection.updated_at else ""
+            created_at=serialize_datetime(collection.created_at) or "",
+            updated_at=serialize_datetime(collection.updated_at) or ""
         )
         
     except HTTPException:
@@ -412,7 +413,7 @@ def get_collection_contents(collection_id: str, db: Session = Depends(get_db)):
                 "title": content.title,
                 "modality": content.modality,
                 "source_uri": content.source_uri,
-                "created_at": content.created_at.isoformat() if content.created_at else None
+                "created_at": serialize_datetime(content.created_at)
             })
         
         return {
@@ -626,7 +627,7 @@ def debug_duplicate_collections(db: Session = Depends(get_db)):
                         "id": str(c.id),
                         "category_id": str(c.category_id) if c.category_id else None,
                         "category_name": c.category.name if c.category else None,
-                        "created_at": c.created_at.isoformat() if c.created_at else None
+                        "created_at": serialize_datetime(c.created_at)
                     }
                     for c in collections
                 ]
@@ -818,7 +819,7 @@ def debug_category_content_mismatch(db: Session = Depends(get_db)):
                         "id": str(content.id),
                         "title": content.title,
                         "source_uri": content.source_uri,
-                        "created_at": content.created_at.isoformat() if content.created_at else None
+                        "created_at": serialize_datetime(content.created_at)
                     }
                     for content in orphan_content
                 ]
@@ -860,7 +861,7 @@ def cleanup_orphan_content(db: Session = Depends(get_db)):
                 "id": str(content.id),
                 "title": content.title,
                 "source_uri": content.source_uri,
-                "created_at": content.created_at.isoformat() if content.created_at else None
+                "created_at": serialize_datetime(content.created_at)
             })
         
         db.commit()

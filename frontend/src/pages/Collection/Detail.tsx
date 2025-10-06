@@ -8,6 +8,7 @@ import DocumentCard from '../../components/Document/DocumentCard';
 import { getCategoryDocuments } from '../../services/collectionService';
 import type { CollectionDocument } from '../../types/collection';
 import styles from './Detail.module.css';
+import { formatDateTime } from '../../utils/dateUtils';
 
 const { Search } = Input;
 
@@ -201,7 +202,7 @@ export default function CollectionDetail() {
                 <div style={{ marginTop: '16px', color: '#666' }}>
                   <p><strong>文件名：</strong>{previewDocument.title}</p>
                   <p><strong>来源：</strong>{previewDocument.source_uri.includes('webui://') ? 'WebUI上传' : '其他'}</p>
-                  <p><strong>创建时间：</strong>{new Date(previewDocument.created_at).toLocaleString()}</p>
+                  <p><strong>创建时间：</strong>{formatDateTime(previewDocument.created_at)}</p>
                   {previewDocument.category_name && (
                     <p><strong>分类：</strong>{previewDocument.category_name}</p>
                   )}
@@ -232,7 +233,7 @@ export default function CollectionDetail() {
                   <p><strong>文件名：</strong>{previewDocument.title}</p>
                   <p><strong>类型：</strong>{previewDocument.modality}</p>
                   <p><strong>来源：</strong>{previewDocument.source_uri.includes('webui://') ? 'WebUI上传' : '其他'}</p>
-                  <p><strong>创建时间：</strong>{new Date(previewDocument.created_at).toLocaleString()}</p>
+                  <p><strong>创建时间：</strong>{formatDateTime(previewDocument.created_at)}</p>
                   {previewDocument.category_name && (
                     <p><strong>分类：</strong>{previewDocument.category_name}</p>
                   )}

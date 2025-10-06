@@ -10,6 +10,7 @@ from sqlalchemy import or_, and_, func, desc
 from sqlalchemy.sql import text
 from app.models import Content, Chunk, QAHistory, Category, ContentCategory, Collection
 from app.services.embedding_service import EmbeddingService
+from app.utils.datetime_utils import serialize_datetime
 import logging
 
 logger = logging.getLogger(__name__)
@@ -437,7 +438,7 @@ class SearchService:
                 "category_color": category_color,
                 "category_confidence": float(category_confidence) if category_confidence else None,
                 "tags": content.tags,
-                "created_at": content.created_at.isoformat(),
+                "created_at": serialize_datetime(content.created_at),
                 "match_type": match_type,
                 "chunk_type": chunk.chunk_type
             }
@@ -489,7 +490,7 @@ class SearchService:
                 "category_color": getattr(row, 'category_color', None),
                 "category_confidence": float(getattr(row, 'category_confidence', 0)) if getattr(row, 'category_confidence', None) else None,
                 "tags": row.tags,
-                "created_at": row.created_at.isoformat(),
+                "created_at": serialize_datetime(row.created_at),
                 "match_type": "semantic",
                 "chunk_type": row.chunk_type,
                 "distance": distance
@@ -671,7 +672,7 @@ class SearchService:
                     "category_role": category_role,
                     "category_source": category_source,
                     "tags": content.tags,
-                    "created_at": content.created_at.isoformat() if content.created_at else None,
+                    "created_at": serialize_datetime(content.created_at),
                     "match_type": "category"
                 })
             

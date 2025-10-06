@@ -72,6 +72,7 @@ def ingest_memo(item: dict, db: Session = Depends(get_db)):
     # 智能合集匹配 - 优先同步执行以确保立即生效
     try:
         from app.services.collection_matching_service import CollectionMatchingService
+from app.utils.datetime_utils import serialize_datetime
         matching_service = CollectionMatchingService(db)
         matched = matching_service.match_document_to_collections(str(content.id))
         log.info(f"Synchronously matched content {content.id} to {len(matched)} collections")
@@ -558,7 +559,7 @@ def get_processing_status(content_id: str, db: Session = Depends(get_db)):
             "file_type": meta.get("file_type", "document"),
             "file_size": meta.get("file_size", 0),
             "estimated_time": meta.get("estimated_processing_time", 5),
-            "created_at": content.created_at.isoformat() if content.created_at else None
+            "created_at": serialize_datetime(content.created_at)
         }
         
         # 只有在允许显示分类时才返回分类信息

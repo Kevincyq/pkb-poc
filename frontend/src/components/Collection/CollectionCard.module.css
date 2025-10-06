@@ -47,6 +47,9 @@
   font-weight: 500;
   color: #1f1f1f;
   line-height: 20px;
+  word-break: break-all;
+  overflow-wrap: break-word;
+  max-width: 100%;
 }
 
 .customCardTitle {
@@ -111,7 +114,9 @@
   .titleText {
     font-size: 15px;
     font-weight: 600;
-    word-break: break-word; /* 长文件名自动换行 */
+    word-break: break-all; /* 强制断行长文件名 */
+    overflow-wrap: break-word;
+    max-width: 100%;
   }
   
   .imageArea {

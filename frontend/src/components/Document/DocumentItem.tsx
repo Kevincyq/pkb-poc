@@ -11,6 +11,7 @@ import {
   FileOutlined
 } from '@ant-design/icons';
 import type { CollectionDocument } from '../../types/collection';
+import { formatDate } from '../../utils/dateUtils';
 
 interface DocumentItemProps {
   document: CollectionDocument;
@@ -212,16 +213,6 @@ export default function DocumentItem({ document, onClick }: DocumentItemProps) {
     return '其他';
   };
 
-  // 格式化日期 - 始终显示完整日期
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    
-    // 始终显示年/月/日格式
-    return `${year}/${month}/${day}`;
-  };
 
   return (
     <div
