@@ -24,6 +24,7 @@ services:
       - maxkb_data:/opt/maxkb             # 使用 Docker volume 而不是主机路径
     restart: always
     networks: [internal]
+    profiles: ["maxkb"]                   # 使用 profile 控制启动
     # 注意：MaxKB 完全独立，不依赖其他服务
 
   pkb-backend:

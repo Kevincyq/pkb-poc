@@ -1,0 +1,121 @@
+/* 移动端全局样式调整 */
+
+/* 基础响应式设置 */
+@media (max-width: 768px) {
+  /* 页面标题和导航栏 */
+  .home-header {
+    flex-direction: column;
+    gap: 12px !important;
+    margin-bottom: 24px !important;
+  }
+  
+  .home-title {
+    font-size: 16px !important;
+    text-align: center;
+  }
+  
+  .home-actions {
+    justify-content: center !important;
+    gap: 12px !important;
+  }
+  
+  /* 上传区域 */
+  .upload-area {
+    padding: 0 8px !important;
+  }
+  
+  /* 底部搜索框 */
+  .ai-input-container {
+    padding: 0 16px 16px 16px !important;
+  }
+  
+  /* 合集网格间距 */
+  .collections-grid {
+    padding: 0 8px 120px 8px !important;
+  }
+  
+  /* 抽屉和弹窗 */
+  .ant-drawer-body {
+    padding: 16px !important;
+  }
+  
+  .ant-modal-body {
+    padding: 16px !important;
+  }
+  
+  /* 按钮触摸优化 */
+  .ant-btn {
+    min-height: 40px;
+    padding: 8px 16px;
+  }
+  
+  .ant-btn-icon-only {
+    min-width: 40px;
+    min-height: 40px;
+  }
+  
+  /* 输入框优化 */
+  .ant-input {
+    min-height: 40px;
+    font-size: 16px; /* 防止iOS缩放 */
+  }
+  
+  .ant-input-affix-wrapper {
+    min-height: 40px;
+  }
+  
+  /* 文件上传提示 */
+  .upload-tooltip {
+    max-width: 90vw !important;
+  }
+}
+
+/* 超小屏幕适配 */
+@media (max-width: 480px) {
+  .home-title {
+    font-size: 15px !important;
+  }
+  
+  .collections-grid {
+    padding: 0 4px 120px 4px !important;
+  }
+  
+  .ant-col {
+    padding: 0 4px !important;
+  }
+  
+  /* 更紧凑的间距 */
+  .ant-row {
+    margin: 0 -4px !important;
+  }
+}
+
+/* 横屏适配 */
+@media (max-width: 768px) and (orientation: landscape) {
+  .collections-grid {
+    padding-bottom: 80px !important;
+  }
+  
+  .ai-input-container {
+    padding-bottom: 12px !important;
+  }
+}
+
+/* 触摸设备优化 */
+@media (hover: none) and (pointer: coarse) {
+  /* 移除hover效果，使用active效果 */
+  .collection-card:hover {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+  
+  .collection-card:active {
+    transform: scale(0.98);
+    transition: transform 0.1s;
+  }
+  
+  /* 增大可点击区域 */
+  .ant-btn, .collection-card, .ant-input {
+    -webkit-tap-highlight-color: rgba(24, 144, 255, 0.1);
+  }
+}

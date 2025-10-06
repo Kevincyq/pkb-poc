@@ -779,13 +779,13 @@ export default function Home() {
 
   return (
     <MainLayout>
-      <div style={{
+      <div className="home-header" style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         marginBottom: '32px'
       }}>
-        <h1 style={{
+        <h1 className="home-title" style={{
           margin: 0,
           fontSize: '18px',
           fontWeight: '500',
@@ -794,7 +794,7 @@ export default function Home() {
         }}>
           个人知识库助理
         </h1>
-        <div style={{
+        <div className="home-actions" style={{
           display: 'flex',
           gap: '16px'
         }}>
@@ -886,7 +886,7 @@ export default function Home() {
         </div>
       </div>
 
-      <div style={{ padding: '0 0 120px' }}>
+      <div className="collections-grid" style={{ padding: '0 0 120px' }}>
         {isLoading ? (
           <div style={{ 
             textAlign: 'center', 
@@ -906,7 +906,7 @@ export default function Home() {
         ) : (
           <Row gutter={[16, 16]}>
             {/* Create Card */}
-            <Col span={4}>
+            <Col xs={12} sm={8} md={6} lg={4} xl={4}>
               <CollectionCard
                 title=""
                 contentCount={0}
@@ -919,7 +919,7 @@ export default function Home() {
             {sortedCustomCollections.map(collection => {
               console.log('Rendering collection:', collection.id, collection.name);
               return (
-                <Col span={4} key={collection.id}>
+                <Col xs={12} sm={8} md={6} lg={4} xl={4} key={collection.id}>
                   <CollectionCard
                     title={collection.name}
                     contentCount={collection.content_count}
@@ -937,7 +937,7 @@ export default function Home() {
             
             {/* System Categories */}
             {sortedCategories.map(category => (
-              <Col span={4} key={category.id}>
+              <Col xs={12} sm={8} md={6} lg={4} xl={4} key={category.id}>
                 <CollectionCard
                   title={category.name}
                   contentCount={category.content_count}

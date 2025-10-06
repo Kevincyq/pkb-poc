@@ -1,5 +1,6 @@
 import { EllipsisOutlined, PlusOutlined } from '@ant-design/icons';
 import { Dropdown, type MenuProps } from 'antd';
+import styles from './CollectionCard.module.css';
 
 interface CollectionCardProps {
   title: string;
@@ -54,20 +55,7 @@ export default function CollectionCard({
     return (
       <div 
         onClick={onClick}
-        style={{
-          width: '100%',
-          height: '100%',
-          border: '1px dashed #d9d9d9',
-          borderRadius: '8px',
-          overflow: 'hidden',
-          cursor: 'pointer',
-          background: '#f5f5f5',
-          transition: 'all 0.2s',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: '220px'
-        }}
+        className={styles.createCard}
       >
         <PlusOutlined style={{ 
           fontSize: '24px',
@@ -80,29 +68,14 @@ export default function CollectionCard({
   // 自建合集卡片
   if (isCustomCollection) {
     return (
-      <div style={{
-        width: '100%',
-        border: '1px solid #e5e5e5',
-        borderRadius: '8px',
-        overflow: 'hidden',
-        background: '#fff',
-        transition: 'all 0.2s',
+      <div className={styles.collectionCard} style={{
         minHeight: '220px',
         display: 'flex',
         flexDirection: 'column'
       }}>
         {/* 标题区域 */}
-        <div style={{
-          padding: '12px 16px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <span style={{
-            fontSize: '14px',
-            fontWeight: '500',
-            color: '#1f1f1f',
-            lineHeight: '20px',
+        <div className={styles.customCardTitle}>
+          <span className={styles.titleText} style={{
             cursor: 'pointer'
           }} onClick={onClick}>
             {title}
@@ -122,27 +95,12 @@ export default function CollectionCard({
         </div>
 
         {/* 简洁的图标区域 */}
-        <div style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          color: '#fff',
-          fontSize: '32px',
-          padding: '40px 0'
-        }}>
+        <div className={styles.customIconArea}>
           📁
         </div>
 
         {/* 底部信息 */}
-        <div style={{
-          padding: '12px 16px',
-          fontSize: '12px',
-          color: '#666',
-          lineHeight: '18px',
-          borderTop: '1px solid #f0f0f0'
-        }}>
+        <div className={styles.customCardFooter}>
           {contentCount}条内容
         </div>
       </div>
@@ -153,57 +111,26 @@ export default function CollectionCard({
   return (
     <div 
       onClick={onClick}
-      style={{
-        width: '100%',
-        border: '1px solid #e5e5e5',
-        borderRadius: '8px',
-        overflow: 'hidden',
-        cursor: 'pointer',
-        background: '#fff',
-        transition: 'all 0.2s'
-      }}
+      className={styles.collectionCard}
     >
       {/* 标题区域 */}
-      <div style={{
-        padding: '12px 16px 8px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center'
-      }}>
-        <span style={{
-          fontSize: '14px',
-          fontWeight: '500',
-          color: '#1f1f1f',
-          lineHeight: '20px'
-        }}>
+      <div className={styles.cardTitle}>
+        <span className={styles.titleText}>
           {title}
         </span>
       </div>
 
       {/* 图片区域 */}
-      <div style={{
-        width: '100%',
-        height: '140px',
-        overflow: 'hidden'
-      }}>
+      <div className={styles.imageArea}>
         <img 
           src={getCollectionImage(title)}
           alt={title}
-          style={{
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover'
-          }}
+          className={styles.cardImage}
         />
       </div>
 
       {/* 底部信息 */}
-      <div style={{
-        padding: '8px 16px',
-        fontSize: '12px',
-        color: '#666',
-        lineHeight: '18px'
-      }}>
+      <div className={styles.cardFooter}>
         {contentCount}条内容
       </div>
     </div>

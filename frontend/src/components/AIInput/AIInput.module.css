@@ -32,3 +32,35 @@
 .sendIcon:hover {
   color: #4096ff;
 }
+
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .wrapper {
+    bottom: 16px;
+    width: 95%;
+    padding: 12px;
+    border-radius: 8px;
+  }
+  
+  .input {
+    font-size: 16px; /* 防止iOS缩放 */
+    padding: 14px;
+    min-height: 48px;
+  }
+  
+  .sendIcon {
+    font-size: 20px;
+    padding: 4px;
+  }
+}
+
+@media (max-width: 480px) {
+  .wrapper {
+    width: 98%;
+    padding: 10px;
+  }
+  
+  .input {
+    padding: 12px;
+  }
+}
