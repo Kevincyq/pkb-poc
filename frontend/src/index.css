@@ -45,7 +45,7 @@ pre, code {
   min-width: 0;
   overflow-wrap: break-word;
   max-width: 100%;
-  overflow: hidden;
+  overflow-x: hidden; /* 只隐藏横向溢出，保留纵向以支持Dropdown */
 }
 
 /* 防止卡片被长文件名撑宽 */
@@ -53,7 +53,7 @@ pre, code {
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
-  overflow: hidden;
+  overflow-x: hidden; /* 只隐藏横向溢出，保留纵向以支持Dropdown */
 }
 
 .ant-card-body {

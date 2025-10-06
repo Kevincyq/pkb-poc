@@ -57,6 +57,12 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  position: relative;
+}
+
+.customCardTitle .ant-dropdown-trigger {
+  z-index: 100;
+  position: relative;
 }
 
 .imageArea {

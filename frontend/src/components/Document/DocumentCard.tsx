@@ -492,7 +492,6 @@ export default function DocumentCard({
           onClick={(e) => {
             console.log('🎯 More button clicked');
             e.stopPropagation();
-            e.preventDefault();
           }}
           className={styles.moreButton}
           onMouseEnter={(e) => {

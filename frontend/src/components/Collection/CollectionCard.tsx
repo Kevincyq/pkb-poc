@@ -68,29 +68,60 @@ export default function CollectionCard({
   // 自建合集卡片
   if (isCustomCollection) {
     return (
-      <div className={styles.collectionCard} style={{
-        minHeight: '220px',
-        display: 'flex',
-        flexDirection: 'column'
-      }}>
+      <div 
+        className={styles.collectionCard} 
+        style={{
+          minHeight: '220px',
+          display: 'flex',
+          flexDirection: 'column'
+        }}
+        onClick={(e) => {
+          // 检查点击是否来自三点菜单区域
+          const target = e.target as HTMLElement;
+          
+          // 更精确的检测：检查是否点击了EllipsisOutlined图标或其父级Dropdown
+          const isDropdownClick = target.closest('.ant-dropdown-trigger') || 
+                                 target.closest('[data-icon="ellipsis"]') ||
+                                 target.closest('[data-testid="collection-more-button"]') ||
+                                 target.classList.contains('anticon-ellipsis');
+          
+          if (isDropdownClick) {
+            console.log('🎯 Clicked on dropdown area, preventing card click');
+            return;
+          }
+          
+          console.log('🎯 Clicked on card area, triggering navigation');
+          onClick?.();
+        }}
+      >
         {/* 标题区域 */}
         <div className={styles.customCardTitle}>
           <span className={styles.titleText} style={{
             cursor: 'pointer'
-          }} onClick={onClick}>
+          }}>
             {title}
           </span>
           <Dropdown 
             menu={{ items: menuItems }} 
             trigger={['click']}
             placement="bottomRight"
+            onOpenChange={(open) => {
+              console.log('🎯 Collection Dropdown open state changed:', open);
+            }}
           >
-            <EllipsisOutlined style={{ 
-              fontSize: '16px',
-              color: '#999',
-              padding: '4px',
-              cursor: 'pointer'
-            }} />
+            <EllipsisOutlined 
+              data-testid="collection-more-button"
+              style={{ 
+                fontSize: '16px',
+                color: '#999',
+                padding: '4px',
+                cursor: 'pointer'
+              }}
+              onClick={(e) => {
+                console.log('🎯 Collection More button clicked');
+                e.stopPropagation();
+              }}
+            />
           </Dropdown>
         </div>
 
