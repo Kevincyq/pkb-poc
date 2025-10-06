@@ -367,7 +367,16 @@ export default function DocumentCard({
   return (
     <div style={{ position: 'relative', width: '100%', maxWidth: '100%', overflow: 'hidden' }}>
       <Card 
-        onClick={handlePreview}
+        onClick={(e) => {
+          // 检查点击是否来自More按钮区域
+          const target = e.target as HTMLElement;
+          const moreButton = e.currentTarget.querySelector('.ant-dropdown-trigger');
+          if (moreButton && (moreButton.contains(target) || moreButton === target)) {
+            // 如果点击的是More按钮区域，不触发预览
+            return;
+          }
+          handlePreview();
+        }}
         hoverable
         cover={thumbnailElement}
         className={styles.documentCard}
@@ -470,6 +479,11 @@ export default function DocumentCard({
         onOpenChange={(open) => {
           console.log('🎯 Dropdown open state changed:', open);
         }}
+        // 防止Dropdown容器的点击事件冒泡
+        onClick={(e) => {
+          console.log('🎯 Dropdown container clicked');
+          e.stopPropagation();
+        }}
       >
         <Button
           type="text"
@@ -478,6 +492,7 @@ export default function DocumentCard({
           onClick={(e) => {
             console.log('🎯 More button clicked');
             e.stopPropagation();
+            e.preventDefault();
           }}
           className={styles.moreButton}
           onMouseEnter={(e) => {

@@ -86,9 +86,10 @@
   color: white;
   border: none;
   border-radius: 4px;
-  z-index: 10;
+  z-index: 100;
   opacity: 0.8;
   transition: opacity 0.3s;
+  pointer-events: auto;
 }
 
 .moreButton:hover {
