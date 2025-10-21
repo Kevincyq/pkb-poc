@@ -226,6 +226,7 @@ class User(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     google_id = Column(String, unique=True, nullable=True)  # Google用户ID，可为空（test用户）
     email = Column(String, unique=True, nullable=False)
+    password_hash = Column(String, nullable=True)  # 密码哈希，Google用户可为空
     display_name = Column(String, nullable=True)
     avatar_url = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)

@@ -8,7 +8,7 @@ from pathlib import Path
 from datetime import datetime
 from sqlalchemy.orm import Session
 from app.models import User, CloudAuth, StorageConfig
-from app.services.cloud_connector_service import CloudConnectorService
+from .cloud_connector_service import CloudConnectorService
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +41,39 @@ class StorageStrategyService:
             
             for user_config in user_configs:
                 config[user_config.config_key] = user_config.config_value
+            
+            # 如果没有用户配置，根据用户类型创建默认配置
+            if not user_configs:
+                user = db.query(User).filter(User.id == user_id).first()
+                if user:
+                    if user.google_id:
+                        # Google用户默认使用Google Drive
+                        default_config = {
+                            "default_cloud_provider": "google_drive",
+                            "large_file_threshold": int(os.getenv("LARGE_FILE_THRESHOLD", "5242880")),
+                            "enable_google_drive": True,
+                            "enable_nextcloud": False
+                        }
+                    else:
+                        # Test用户默认使用Nextcloud
+                        default_config = {
+                            "default_cloud_provider": "nextcloud",
+                            "large_file_threshold": int(os.getenv("LARGE_FILE_THRESHOLD", "5242880")),
+                            "enable_google_drive": False,
+                            "enable_nextcloud": True
+                        }
+                    
+                    # 保存默认配置
+                    storage_config = StorageConfig(
+                        user_id=user_id,
+                        config_key="storage_preferences",
+                        config_value=default_config
+                    )
+                    db.add(storage_config)
+                    db.commit()
+                    
+                    # 更新config
+                    config.update(default_config)
         
         return config
     

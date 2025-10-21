@@ -101,11 +101,51 @@ class GoogleDriveConnector(CloudStorageConnector):
     async def create_folder(self, folder_name: str, user_id: str) -> str:
         """创建PKB专用文件夹"""
         try:
-            # 这里需要从数据库获取用户的access_token
-            # 暂时返回一个模拟的文件夹ID
-            folder_id = f"pkb_folder_{user_id}_{uuid.uuid4()}"
-            logger.info(f"Created Google Drive folder: {folder_id}")
-            return folder_id
+            # 从数据库获取用户的access_token
+            from sqlalchemy.orm import Session
+            from app.db import SessionLocal
+            from app.models import CloudAuth
+            
+            db = SessionLocal()
+            try:
+                cloud_auth = db.query(CloudAuth).filter(
+                    CloudAuth.user_id == user_id,
+                    CloudAuth.provider == "google_drive",
+                    CloudAuth.is_active == True
+                ).first()
+                
+                if not cloud_auth or not cloud_auth.access_token:
+                    raise Exception("No valid Google Drive access token found")
+                
+                # 创建文件夹的元数据
+                folder_metadata = {
+                    "name": folder_name,
+                    "mimeType": "application/vnd.google-apps.folder"
+                }
+                
+                async with httpx.AsyncClient() as client:
+                    headers = {
+                        'Authorization': f"Bearer {cloud_auth.access_token}",
+                        'Content-Type': 'application/json'
+                    }
+                    
+                    response = await client.post(
+                        'https://www.googleapis.com/drive/v3/files',
+                        headers=headers,
+                        json=folder_metadata
+                    )
+                    
+                    if response.status_code != 200:
+                        raise Exception(f"Failed to create folder: {response.text}")
+                    
+                    folder_data = response.json()
+                    folder_id = folder_data['id']
+                    
+                    logger.info(f"Created Google Drive folder: {folder_id}")
+                    return folder_id
+                    
+            finally:
+                db.close()
             
         except Exception as e:
             logger.error(f"Failed to create Google Drive folder: {e}")
@@ -114,17 +154,65 @@ class GoogleDriveConnector(CloudStorageConnector):
     async def upload_file(self, file_content: bytes, filename: str, user_id: str) -> Dict[str, Any]:
         """上传文件到Google Drive"""
         try:
-            # 这里需要实现实际的Google Drive API上传
-            # 暂时返回模拟结果
-            file_id = f"gdrive_file_{user_id}_{uuid.uuid4()}"
+            # 从数据库获取用户的access_token和folder_id
+            from sqlalchemy.orm import Session
+            from app.db import SessionLocal
+            from app.models import CloudAuth
             
-            return {
-                "success": True,
-                "file_id": file_id,
-                "filename": filename,
-                "file_size": len(file_content),
-                "provider": "google_drive"
-            }
+            db = SessionLocal()
+            try:
+                cloud_auth = db.query(CloudAuth).filter(
+                    CloudAuth.user_id == user_id,
+                    CloudAuth.provider == "google_drive",
+                    CloudAuth.is_active == True
+                ).first()
+                
+                if not cloud_auth or not cloud_auth.access_token:
+                    raise Exception("No valid Google Drive access token found")
+                
+                if not cloud_auth.folder_id:
+                    raise Exception("No Google Drive folder ID found")
+                
+                # 创建文件元数据
+                file_metadata = {
+                    "name": filename,
+                    "parents": [cloud_auth.folder_id]
+                }
+                
+                async with httpx.AsyncClient() as client:
+                    # 上传文件
+                    headers = {
+                        'Authorization': f"Bearer {cloud_auth.access_token}"
+                    }
+                    
+                    import json
+                    files = {
+                        'metadata': (None, json.dumps(file_metadata), 'application/json'),
+                        'file': (filename, file_content)
+                    }
+                    
+                    response = await client.post(
+                        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+                        headers=headers,
+                        files=files
+                    )
+                    
+                    if response.status_code != 200:
+                        raise Exception(f"Failed to upload file: {response.text}")
+                    
+                    file_data = response.json()
+                    file_id = file_data['id']
+                    
+                    return {
+                        "success": True,
+                        "file_id": file_id,
+                        "filename": filename,
+                        "file_size": len(file_content),
+                        "provider": "google_drive"
+                    }
+                    
+            finally:
+                db.close()
             
         except Exception as e:
             logger.error(f"Failed to upload file to Google Drive: {e}")
@@ -136,9 +224,39 @@ class GoogleDriveConnector(CloudStorageConnector):
     async def download_file(self, file_id: str, user_id: str) -> bytes:
         """从Google Drive下载文件"""
         try:
-            # 这里需要实现实际的Google Drive API下载
-            # 暂时返回模拟数据
-            return b"Mock file content from Google Drive"
+            # 从数据库获取用户的access_token
+            from sqlalchemy.orm import Session
+            from app.db import SessionLocal
+            from app.models import CloudAuth
+            
+            db = SessionLocal()
+            try:
+                cloud_auth = db.query(CloudAuth).filter(
+                    CloudAuth.user_id == user_id,
+                    CloudAuth.provider == "google_drive",
+                    CloudAuth.is_active == True
+                ).first()
+                
+                if not cloud_auth or not cloud_auth.access_token:
+                    raise Exception("No valid Google Drive access token found")
+                
+                async with httpx.AsyncClient() as client:
+                    headers = {
+                        'Authorization': f"Bearer {cloud_auth.access_token}"
+                    }
+                    
+                    response = await client.get(
+                        f'https://www.googleapis.com/drive/v3/files/{file_id}?alt=media',
+                        headers=headers
+                    )
+                    
+                    if response.status_code != 200:
+                        raise Exception(f"Failed to download file: {response.text}")
+                    
+                    return response.content
+                    
+            finally:
+                db.close()
             
         except Exception as e:
             logger.error(f"Failed to download file from Google Drive: {e}")
@@ -147,9 +265,39 @@ class GoogleDriveConnector(CloudStorageConnector):
     async def get_thumbnail(self, file_id: str, user_id: str) -> bytes:
         """获取Google Drive文件缩略图"""
         try:
-            # 这里需要实现实际的Google Drive API缩略图获取
-            # 暂时返回模拟数据
-            return b"Mock thumbnail from Google Drive"
+            # 从数据库获取用户的access_token
+            from sqlalchemy.orm import Session
+            from app.db import SessionLocal
+            from app.models import CloudAuth
+            
+            db = SessionLocal()
+            try:
+                cloud_auth = db.query(CloudAuth).filter(
+                    CloudAuth.user_id == user_id,
+                    CloudAuth.provider == "google_drive",
+                    CloudAuth.is_active == True
+                ).first()
+                
+                if not cloud_auth or not cloud_auth.access_token:
+                    raise Exception("No valid Google Drive access token found")
+                
+                async with httpx.AsyncClient() as client:
+                    headers = {
+                        'Authorization': f"Bearer {cloud_auth.access_token}"
+                    }
+                    
+                    response = await client.get(
+                        f'https://www.googleapis.com/drive/v3/files/{file_id}/thumbnail?sz=300',
+                        headers=headers
+                    )
+                    
+                    if response.status_code != 200:
+                        raise Exception(f"Failed to get thumbnail: {response.text}")
+                    
+                    return response.content
+                    
+            finally:
+                db.close()
             
         except Exception as e:
             logger.error(f"Failed to get thumbnail from Google Drive: {e}")

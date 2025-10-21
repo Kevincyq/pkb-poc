@@ -627,7 +627,7 @@ async def upload_file_smart(
         file_size = len(file_content)
         
         # 使用存储策略服务
-        from app.services.storage_strategy_service import StorageStrategyService
+        from ..services.storage_strategy_service import StorageStrategyService
         strategy_service = StorageStrategyService()
         
         result = await strategy_service.upload_file(
@@ -710,7 +710,7 @@ async def upload_file_smart(
 async def get_storage_config(current_user: User = Depends(get_current_user), 
                             db: Session = Depends(get_db)):
     """获取用户存储配置"""
-    from app.services.storage_strategy_service import StorageStrategyService
+    from ..services.storage_strategy_service import StorageStrategyService
     strategy_service = StorageStrategyService()
     
     config = await strategy_service.get_storage_config(str(current_user.id), db)
@@ -742,7 +742,7 @@ async def update_storage_config(
     db: Session = Depends(get_db)
 ):
     """更新用户存储配置"""
-    from app.services.storage_strategy_service import StorageStrategyService
+    from ..services.storage_strategy_service import StorageStrategyService
     strategy_service = StorageStrategyService()
     
     result = await strategy_service.update_storage_config(

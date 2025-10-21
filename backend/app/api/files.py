@@ -345,33 +345,107 @@ async def get_file_thumbnail(filename: str, db: Session = Depends(get_db)):
 @router.get("/{filename}")
 async def get_file(filename: str, db: Session = Depends(get_db)):
     """
-    获取原始文件（用于预览和下载）
+    获取原始文件（用于预览和下载）- 支持云盘文件
     """
     try:
         logger.debug(f"🔍 Requesting file: {filename}")
-        file_path = get_file_path(filename, db)
-        logger.debug(f"📁 Resolved file path: {file_path}")
         
-        if not file_path.exists():
-            logger.error(f"File does not exist: {file_path}")
+        # 查找Content记录
+        content = db.query(Content).filter(
+            Content.title == filename
+        ).first()
+        
+        if not content:
             raise HTTPException(status_code=404, detail=f"文件不存在: {filename}")
         
-        # 判断文件类型
-        file_extension = file_path.suffix.lower()
+        # 根据存储策略返回文件
+        if content.storage_provider == "google_drive":
+            # 从Google Drive获取文件
+            from app.services.cloud_connector_service import CloudConnectorService
+            connector_service = CloudConnectorService()
+            
+            file_content = await connector_service.download_from_cloud(
+                content.cloud_file_id, str(content.user_id), "google_drive"
+            )
+            
+            # 判断文件类型
+            file_extension = Path(filename).suffix.lower()
+            media_type_map = {
+                '.jpg': 'image/jpeg',
+                '.jpeg': 'image/jpeg',
+                '.png': 'image/png',
+                '.gif': 'image/gif',
+                '.bmp': 'image/bmp',
+                '.webp': 'image/webp',
+                '.pdf': 'application/pdf',
+                '.txt': 'text/plain',
+                '.md': 'text/markdown',
+                '.json': 'application/json',
+            }
+            media_type = media_type_map.get(file_extension, 'application/octet-stream')
+            
+            return Response(
+                content=file_content,
+                media_type=media_type,
+                headers={"Content-Disposition": f"attachment; filename={filename}"}
+            )
         
-        # 根据文件类型设置media_type
-        media_type_map = {
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.png': 'image/png',
-            '.gif': 'image/gif',
-            '.bmp': 'image/bmp',
-            '.webp': 'image/webp',
-            '.pdf': 'application/pdf',
-            '.txt': 'text/plain',
-            '.md': 'text/markdown',
-            '.json': 'application/json',
-        }
+        elif content.storage_provider == "nextcloud":
+            # 从Nextcloud获取文件
+            from app.services.cloud_connector_service import CloudConnectorService
+            connector_service = CloudConnectorService()
+            
+            file_content = await connector_service.download_from_cloud(
+                content.cloud_file_id, str(content.user_id), "nextcloud"
+            )
+            
+            # 判断文件类型
+            file_extension = Path(filename).suffix.lower()
+            media_type_map = {
+                '.jpg': 'image/jpeg',
+                '.jpeg': 'image/jpeg',
+                '.png': 'image/png',
+                '.gif': 'image/gif',
+                '.bmp': 'image/bmp',
+                '.webp': 'image/webp',
+                '.pdf': 'application/pdf',
+                '.txt': 'text/plain',
+                '.md': 'text/markdown',
+                '.json': 'application/json',
+            }
+            media_type = media_type_map.get(file_extension, 'application/octet-stream')
+            
+            return Response(
+                content=file_content,
+                media_type=media_type,
+                headers={"Content-Disposition": f"attachment; filename={filename}"}
+            )
+        
+        else:
+            # 本地文件
+            file_path = get_file_path(filename, db)
+            logger.debug(f"📁 Resolved file path: {file_path}")
+            
+            if not file_path.exists():
+                logger.error(f"File does not exist: {file_path}")
+                raise HTTPException(status_code=404, detail=f"文件不存在: {filename}")
+            
+            # 判断文件类型
+            file_extension = file_path.suffix.lower()
+            
+            # 根据文件类型设置media_type
+            media_type_map = {
+                '.jpg': 'image/jpeg',
+                '.jpeg': 'image/jpeg',
+                '.png': 'image/png',
+                '.gif': 'image/gif',
+                '.bmp': 'image/bmp',
+                '.webp': 'image/webp',
+                '.pdf': 'application/pdf',
+                '.txt': 'text/plain',
+                '.md': 'text/markdown',
+                '.json': 'application/json',
+            }
         
         media_type = media_type_map.get(file_extension, 'application/octet-stream')
         

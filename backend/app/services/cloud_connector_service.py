@@ -4,9 +4,9 @@
 import os
 import logging
 from typing import Dict, Any, Optional
-from .google_drive import GoogleDriveConnector
-from .nextcloud import NextcloudConnector
-from .base import CloudStorageConnector
+from ..connectors.google_drive import GoogleDriveConnector
+from ..connectors.nextcloud import NextcloudConnector
+from ..connectors.base import CloudStorageConnector
 
 logger = logging.getLogger(__name__)
 

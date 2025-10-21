@@ -54,15 +54,26 @@ class NextcloudConnector(CloudStorageConnector):
         """上传文件到Nextcloud"""
         try:
             # 使用现有的WebDAV上传逻辑
+            from app.adapters.webdav import upload_file_to_webdav
+            
             file_path = f"{self.inbox_folder}/{filename}"
             
-            return {
-                "success": True,
-                "file_id": file_path,
-                "filename": filename,
-                "file_size": len(file_content),
-                "provider": "nextcloud"
-            }
+            # 调用现有的WebDAV上传函数
+            success = await upload_file_to_webdav(file_content, file_path)
+            
+            if success:
+                return {
+                    "success": True,
+                    "file_id": file_path,
+                    "filename": filename,
+                    "file_size": len(file_content),
+                    "provider": "nextcloud"
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": "Failed to upload to Nextcloud"
+                }
             
         except Exception as e:
             logger.error(f"Failed to upload file to Nextcloud: {e}")
@@ -75,8 +86,10 @@ class NextcloudConnector(CloudStorageConnector):
         """从Nextcloud下载文件"""
         try:
             # 使用现有的WebDAV下载逻辑
-            # 这里需要调用现有的webdav.py中的下载函数
-            return b"Mock file content from Nextcloud"
+            from app.adapters.webdav import download_binary
+            
+            file_content = await download_binary(file_id)
+            return file_content
             
         except Exception as e:
             logger.error(f"Failed to download file from Nextcloud: {e}")
