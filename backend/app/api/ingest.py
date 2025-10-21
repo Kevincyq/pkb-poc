@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from app.db import SessionLocal
-from app.models import Content, Chunk
+from app.models import Content, Chunk, User, CloudAuth
 from app.adapters import webdav
 from pydantic import BaseModel
-from typing import List
+from typing import List, Dict, Any
 import logging
 import os
 import uuid
@@ -13,6 +13,7 @@ from pathlib import Path
 from app.workers.tasks import ingest_file as ingest_task, generate_embeddings, simple_chunk, classify_content
 from app.parsers.document_processor import DocumentProcessor
 from app.utils.datetime_utils import serialize_datetime
+from app.api.auth import get_current_user
 
 router = APIRouter()
 log = logging.getLogger(__name__)
@@ -749,8 +750,4 @@ async def update_storage_config(
     )
     
     return result
-
-# 需要添加的导入
-from app.models import User, CloudAuth
-from app.api.auth import get_current_user
 
