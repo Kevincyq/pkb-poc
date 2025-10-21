@@ -28,6 +28,13 @@ class GoogleDriveConnector(CloudStorageConnector):
     
     async def authenticate(self, user_id: str) -> Dict[str, Any]:
         """生成Google OAuth授权URL"""
+        if not all([self.client_id, self.client_secret, self.redirect_uri]):
+            logger.error("Google OAuth配置不完整")
+            return {
+                "success": False,
+                "error": "Google OAuth配置不完整。请设置以下环境变量：GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI"
+            }
+        
         scope = 'https://www.googleapis.com/auth/drive.file'
         state = f"gdrive_{user_id}_{uuid.uuid4()}"
         
@@ -43,6 +50,7 @@ class GoogleDriveConnector(CloudStorageConnector):
         )
         
         return {
+            "success": True,
             "auth_url": auth_url,
             "state": state,
             "provider": "google_drive"

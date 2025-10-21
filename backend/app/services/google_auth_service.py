@@ -38,8 +38,8 @@ class GoogleAuthService:
         """
         try:
             if not self.firebase_api_key:
-                logger.error("Google Firebase API key not configured")
-                return {"success": False, "error": "Google authentication not configured"}
+                logger.warning("Google Firebase API key not configured, skipping Firebase authentication")
+                return {"success": False, "error": "Firebase authentication not configured"}
             
             # 使用Firebase Auth REST API验证密码
             url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={self.firebase_api_key}"

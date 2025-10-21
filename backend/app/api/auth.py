@@ -156,12 +156,17 @@ async def google_auth():
         temp_user_id = str(uuid.uuid4())
         auth_info = await google_connector.authenticate(temp_user_id)
         
+        if not auth_info.get("success", True):
+            raise HTTPException(status_code=400, detail=auth_info.get("error", "Google OAuth配置错误"))
+        
         return {
             "auth_url": auth_info["auth_url"],
             "state": auth_info["state"],
             "provider": auth_info["provider"]
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Google auth error: {e}")
         raise HTTPException(status_code=500, detail=f"认证启动失败: {str(e)}")
