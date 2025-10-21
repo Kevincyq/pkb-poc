@@ -128,20 +128,36 @@ echo ""
 # 测试API端点
 echo "5️⃣ 测试Google OAuth端点"
 echo "----------------------------------------"
-BASE_URL="http://34.247.12.46:8010"
+
+# 检测实际运行环境
+BASE_URL="http://34.247.12.46:8010"  # 默认测试环境
+
+# 如果REDIRECT_URI是https域名，也测试一下
 if [ ! -z "$GOOGLE_REDIRECT_URI" ]; then
     if [[ "$GOOGLE_REDIRECT_URI" == https://* ]]; then
-        BASE_URL=$(echo "$GOOGLE_REDIRECT_URI" | sed 's|/api/auth/callback/gdrive||')
+        HTTPS_BASE_URL=$(echo "$GOOGLE_REDIRECT_URI" | sed 's|/api/auth/callback/gdrive||')
+        echo "检测到HTTPS域名配置，同时测试两个URL："
+        echo ""
+        echo "1️⃣ 测试HTTPS域名: $HTTPS_BASE_URL/api/auth/google"
+        HTTPS_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$HTTPS_BASE_URL/api/auth/google" 2>/dev/null)
+        if [ "$HTTPS_RESPONSE" == "307" ] || [ "$HTTPS_RESPONSE" == "302" ] || [ "$HTTPS_RESPONSE" == "200" ]; then
+            echo -e "${GREEN}✅ HTTPS域名可访问 (HTTP $HTTPS_RESPONSE)${NC}"
+        else
+            echo -e "${YELLOW}⚠️  HTTPS域名不可访问 (HTTP $HTTPS_RESPONSE)${NC}"
+        fi
+        echo ""
     fi
 fi
 
-echo "测试URL: $BASE_URL/api/auth/google"
+echo "2️⃣ 测试实际运行环境: $BASE_URL/api/auth/google"
 RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/auth/google" 2>/dev/null)
 
 if [ "$RESPONSE" == "307" ] || [ "$RESPONSE" == "302" ] || [ "$RESPONSE" == "200" ]; then
-    echo -e "${GREEN}✅ API端点可访问 (HTTP $RESPONSE)${NC}"
+    echo -e "${GREEN}✅ 实际环境API端点可访问 (HTTP $RESPONSE)${NC}"
     
     # 获取授权URL
+    echo ""
+    echo "🔍 获取Google授权URL..."
     AUTH_URL=$(curl -s -L "$BASE_URL/api/auth/google" 2>/dev/null | grep -o 'https://accounts.google.com[^"]*' | head -1)
     if [ ! -z "$AUTH_URL" ]; then
         echo ""
@@ -156,10 +172,32 @@ if [ "$RESPONSE" == "307" ] || [ "$RESPONSE" == "302" ] || [ "$RESPONSE" == "200
             echo "   请运行: docker-compose -f docker-compose.cloud.yml restart pkb-backend"
         else
             echo -e "${GREEN}✅ 授权URL参数正确${NC}"
+            echo ""
+            echo "🎯 测试建议："
+            echo "   1. 复制上面的授权URL到浏览器"
+            echo "   2. 登录你的Google账号"
+            echo "   3. 授权PKB访问你的Google Drive"
+            echo "   4. 检查是否成功跳转回回调URL"
         fi
+    else
+        echo -e "${YELLOW}⚠️  无法获取授权URL${NC}"
+        echo "   可能的原因："
+        echo "   1. 服务刚重启，还未完全启动"
+        echo "   2. API端点返回的不是预期的重定向"
+        echo "   3. 网络连接问题"
     fi
 else
-    echo -e "${RED}❌ API端点不可访问 (HTTP $RESPONSE)${NC}"
+    echo -e "${RED}❌ 实际环境API端点不可访问 (HTTP $RESPONSE)${NC}"
+    echo ""
+    echo "🔧 排查建议："
+    echo "   1. 检查服务是否正常运行："
+    echo "      docker-compose -f docker-compose.cloud.yml ps"
+    echo "   2. 检查服务日志："
+    echo "      docker-compose -f docker-compose.cloud.yml logs pkb-backend"
+    echo "   3. 检查端口是否开放："
+    echo "      netstat -tlnp | grep 8010"
+    echo "   4. 检查防火墙设置："
+    echo "      sudo ufw status"
 fi
 echo ""
 
