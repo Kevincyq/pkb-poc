@@ -33,6 +33,10 @@ Pillow>=9.0.0
 # torch
 # transformers
 
+# JWT 认证支持
+PyJWT>=2.8.0
+cryptography>=3.4.8
+
 # Google认证支持
 google-auth>=2.23.0
 google-auth-oauthlib>=1.1.0
