@@ -12,14 +12,21 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 import jwt
+from pydantic import BaseModel
 
 from app.db import get_db
 from app.models import User, CloudAuth, StorageConfig
 from ..services.cloud_connector_service import CloudConnectorService
 from ..services.storage_strategy_service import StorageStrategyService
+from ..services.google_auth_service import google_auth_service
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# 请求模型
+class LoginRequest(BaseModel):
+    username: str
+    password: str
 
 # JWT配置
 JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'your-secret-key')
@@ -77,21 +84,27 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)) -> U
     return user
 
 @router.post("/auth/login")
-async def user_login(username: str, password: str, db: Session = Depends(get_db)):
-    """用户登录（用户名/密码）"""
+async def user_login(login_data: LoginRequest, db: Session = Depends(get_db)):
+    """统一用户登录（支持test用户和Google用户）"""
     try:
         # 查找用户
-        user = db.query(User).filter(User.email == username).first()
+        user = db.query(User).filter(User.email == login_data.username).first()
         
         if not user:
             raise HTTPException(status_code=401, detail="用户名或密码错误")
         
-        # 验证密码
-        if not user.password_hash:
-            raise HTTPException(status_code=401, detail="用户密码未设置")
-        
-        if not verify_password(password, user.password_hash):
-            raise HTTPException(status_code=401, detail="用户名或密码错误")
+        # 检查用户类型并验证
+        if user.google_id:
+            # Google用户：需要与Google IDP认证
+            if not await verify_google_user_credentials(login_data.username, login_data.password):
+                raise HTTPException(status_code=401, detail="Google用户认证失败")
+        else:
+            # Test用户或其他本地用户：直接验证密码
+            if not user.password_hash:
+                raise HTTPException(status_code=401, detail="用户密码未设置")
+            
+            if not verify_password(login_data.password, user.password_hash):
+                raise HTTPException(status_code=401, detail="用户名或密码错误")
         
         # 生成JWT token
         jwt_token = create_jwt_token(user)
@@ -114,6 +127,23 @@ async def user_login(username: str, password: str, db: Session = Depends(get_db)
     except Exception as e:
         logger.error(f"Login error: {e}")
         raise HTTPException(status_code=500, detail=f"登录失败: {str(e)}")
+
+async def verify_google_user_credentials(email: str, password: str) -> bool:
+    """验证Google用户凭据（使用真实Google认证API）"""
+    try:
+        # 使用Google Identity Platform验证密码
+        result = await google_auth_service.verify_password(email, password)
+        
+        if result["success"]:
+            logger.info(f"Google user {email} authenticated successfully")
+            return True
+        else:
+            logger.warning(f"Google user {email} authentication failed: {result.get('error')}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Google user verification error: {e}")
+        return False
 
 @router.get("/auth/google")
 async def google_auth():
@@ -274,61 +304,81 @@ async def get_current_user_info(current_user: User = Depends(get_current_user),
         "cloud_auth_status": auth_status
     }
 
-@router.post("/auth/test-login")
-async def test_login(username: str, password: str, db: Session = Depends(get_db)):
-    """Test用户登录"""
+@router.post("/auth/register-google")
+async def register_google_user(login_data: LoginRequest, display_name: str = None, db: Session = Depends(get_db)):
+    """注册Google用户（使用真实Google认证）"""
     try:
-        # 验证用户名和密码
-        if username != "test" or password != "test":
-            raise HTTPException(status_code=401, detail="用户名或密码错误")
+        # 检查用户是否已存在
+        existing_user = db.query(User).filter(User.email == login_data.username).first()
+        if existing_user:
+            raise HTTPException(status_code=400, detail="用户已存在")
         
-        # 查找test用户
-        test_user = db.query(User).filter(User.email == "test@pkb.local").first()
+        # 使用Google Identity Platform创建用户
+        google_result = await google_auth_service.create_user(
+            login_data.username, 
+            login_data.password, 
+            display_name
+        )
         
-        if not test_user:
-            raise HTTPException(status_code=404, detail="Test用户不存在")
+        if not google_result["success"]:
+            raise HTTPException(status_code=400, detail=f"Google用户创建失败: {google_result.get('error')}")
         
-        # 检查test用户是否有Nextcloud认证
-        nextcloud_auth = db.query(CloudAuth).filter(
-            CloudAuth.user_id == test_user.id,
-            CloudAuth.provider == "nextcloud"
-        ).first()
+        user_info = google_result["user_info"]
         
-        if not nextcloud_auth:
-            # 为test用户创建Nextcloud认证（使用系统凭据）
-            nextcloud_auth = CloudAuth(
-                user_id=test_user.id,
-                provider="nextcloud",
-                access_token=os.getenv("NC_PASS"),  # 使用系统密码作为token
-                refresh_token=None,
-                token_expires_at=None,
-                folder_id=os.getenv("NC_INBOX_FOLDER", "PKB-Inbox"),
-                is_active=True
+        # 创建本地用户记录
+        user = User(
+            google_id=user_info["id"],
+            email=user_info["email"],
+            display_name=user_info["display_name"],
+            avatar_url=None,
+            is_active=True
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        
+        # 创建默认存储配置（Google用户默认使用Google Drive）
+        default_configs = [
+            ("large_file_threshold", 5 * 1024 * 1024),  # 5MB
+            ("default_cloud_provider", "google_drive"),
+            ("enable_google_drive", True),
+            ("enable_nextcloud", False),
+            ("thumbnail_size", {"width": 300, "height": 200}),
+            ("thumbnail_quality", 85)
+        ]
+        
+        for key, value in default_configs:
+            config = StorageConfig(
+                user_id=user.id,
+                config_key=key,
+                config_value=value
             )
-            db.add(nextcloud_auth)
-            db.commit()
+            db.add(config)
+        
+        db.commit()
         
         # 生成JWT token
-        jwt_token = create_jwt_token(test_user)
+        jwt_token = create_jwt_token(user)
         
         return {
             "success": True,
             "user": {
-                "id": str(test_user.id),
-                "email": test_user.email,
-                "display_name": test_user.display_name,
-                "avatar_url": test_user.avatar_url,
-                "is_google_user": False
+                "id": str(user.id),
+                "email": user.email,
+                "display_name": user.display_name,
+                "avatar_url": user.avatar_url,
+                "is_google_user": True
             },
             "token": jwt_token,
-            "message": "Test用户登录成功"
+            "message": "Google用户注册成功"
         }
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Test login error: {e}")
-        raise HTTPException(status_code=500, detail=f"Test登录失败: {str(e)}")
+        logger.error(f"Google register error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"注册失败: {str(e)}")
 
 @router.post("/auth/logout")
 async def logout():
