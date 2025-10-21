@@ -19,6 +19,12 @@ class Content(Base):
     category   = Column(String, nullable=True)      # AI 生成的分类
     meta       = Column(JSON, nullable=True)        # {people, project, topics, ...}
     
+    # 用户和存储相关字段
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=True)
+    storage_provider = Column(String, nullable=True)  # 'local' | 'google_drive' | 'nextcloud'
+    cloud_file_id = Column(String, nullable=True)    # 云盘文件ID或路径
+    file_size = Column(Integer, nullable=True)        # 文件大小（字节）
+    
     # 统计信息
     access_count = Column(Integer, default=0)
     search_count = Column(Integer, default=0)
@@ -29,6 +35,7 @@ class Content(Base):
     updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # 关系
+    user = relationship("User", back_populates="contents")
     chunks = relationship("Chunk", back_populates="content", cascade="all, delete-orphan")
     content_categories = relationship("ContentCategory", back_populates="content", cascade="all, delete-orphan")
     content_tags = relationship("ContentTag", cascade="all, delete-orphan")
@@ -209,4 +216,57 @@ class OpsLog(Base):
     status  = Column(String, default="draft")
     log     = Column(Text, nullable=True)
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
+
+# ==================== 用户认证系统 ====================
+
+class User(Base):
+    """用户表"""
+    __tablename__ = "users"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    google_id = Column(String, unique=True, nullable=True)  # Google用户ID，可为空（test用户）
+    email = Column(String, unique=True, nullable=False)
+    display_name = Column(String, nullable=True)
+    avatar_url = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(TIMESTAMP, default=datetime.utcnow)
+    updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # 关系
+    contents = relationship("Content", back_populates="user")
+    cloud_auths = relationship("CloudAuth", back_populates="user")
+    storage_configs = relationship("StorageConfig", back_populates="user")
+
+class CloudAuth(Base):
+    """云盘认证表"""
+    __tablename__ = "cloud_auths"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)
+    provider = Column(String, nullable=False)  # 'google_drive' | 'nextcloud' | 'onedrive' | 'dropbox'
+    access_token = Column(Text, nullable=True)
+    refresh_token = Column(Text, nullable=True)
+    token_expires_at = Column(TIMESTAMP, nullable=True)
+    folder_id = Column(String, nullable=True)  # 云盘中的专用文件夹ID
+    is_active = Column(Boolean, default=True)
+    created_at = Column(TIMESTAMP, default=datetime.utcnow)
+    updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # 关系
+    user = relationship("User", back_populates="cloud_auths")
+
+class StorageConfig(Base):
+    """存储配置表"""
+    __tablename__ = "storage_configs"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=True)  # None表示全局配置
+    config_key = Column(String, nullable=False)  # 'large_file_threshold', 'default_cloud_provider'
+    config_value = Column(JSON, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(TIMESTAMP, default=datetime.utcnow)
+    updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # 关系
+    user = relationship("User", back_populates="storage_configs")
 

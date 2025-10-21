@@ -610,3 +610,147 @@ async def ingest_file_endpoint(req: IngestRequest):
     payload = {"task_id": str(result.id), "message": f"File {req.path} scheduled for ingest"}
     return JSONResponse(content=payload, status_code=202)
 
+# ==================== 智能存储策略API ====================
+
+@router.post("/upload-smart")
+async def upload_file_smart(
+    file: UploadFile = File(...), 
+    preferred_provider: str = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """智能文件上传（支持云盘存储策略）"""
+    try:
+        # 读取文件内容
+        file_content = await file.read()
+        file_size = len(file_content)
+        
+        # 使用存储策略服务
+        from app.services.storage_strategy_service import StorageStrategyService
+        strategy_service = StorageStrategyService()
+        
+        result = await strategy_service.upload_file(
+            file_content, file.filename, str(current_user.id), db, preferred_provider
+        )
+        
+        if not result["success"]:
+            if result.get("auth_required"):
+                return {
+                    "success": False,
+                    "auth_required": True,
+                    "provider": result["provider"],
+                    "message": result["error"],
+                    "available_providers": result.get("available_providers", [])
+                }
+            else:
+                raise HTTPException(400, result["error"])
+        
+        # 判断文件类型
+        file_extension = Path(file.filename).suffix.lower()
+        is_image = file_extension in {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
+        
+        # 创建Content记录
+        content_record = Content(
+            title=file.filename,
+            text="",  # 异步解析后填充
+            modality='image' if is_image else 'text',
+            user_id=current_user.id,
+            storage_provider=result["strategy"],
+            cloud_file_id=result.get("file_id"),
+            file_size=file_size,
+            source_uri=result["source_uri"],
+            meta={
+                "storage_strategy": result["strategy"],
+                "file_path": result.get("file_path"),
+                "cloud_provider": result.get("provider"),
+                "processing_status": "uploaded",
+                "classification_status": "pending",
+                "parsing_status": "pending",
+                "original_filename": file.filename,
+                "stored_filename": result.get("filename", file.filename),
+            },
+            created_by="webui.smart_upload"
+        )
+        
+        db.add(content_record)
+        db.commit()
+        db.refresh(content_record)
+        
+        # 异步处理任务
+        if result["strategy"] == "local":
+            # 本地文件立即触发解析
+            from app.workers.tasks import parse_and_chunk_file
+            parse_and_chunk_file.apply_async(
+                args=[str(content_record.id)],
+                queue='quick'
+            )
+        else:
+            # 云盘文件需要先下载再解析
+            from app.workers.tasks import download_and_parse_cloud_file
+            download_and_parse_cloud_file.apply_async(
+                args=[str(content_record.id)],
+                queue='heavy'
+            )
+        
+        return {
+            "success": True,
+            "content_id": str(content_record.id),
+            "storage_strategy": result["strategy"],
+            "file_size": file_size,
+            "provider": result.get("provider"),
+            "message": f"文件已{'上传到云盘' if result['strategy'] == 'cloud' else '保存到本地'}"
+        }
+        
+    except Exception as e:
+        log.error(f"Smart file upload error: {e}")
+        raise HTTPException(500, f"文件上传失败: {str(e)}")
+
+@router.get("/storage-config")
+async def get_storage_config(current_user: User = Depends(get_current_user), 
+                            db: Session = Depends(get_db)):
+    """获取用户存储配置"""
+    from app.services.storage_strategy_service import StorageStrategyService
+    strategy_service = StorageStrategyService()
+    
+    config = await strategy_service.get_storage_config(str(current_user.id), db)
+    
+    # 添加用户云盘认证状态
+    cloud_auths = db.query(CloudAuth).filter(
+        CloudAuth.user_id == current_user.id,
+        CloudAuth.is_active == True
+    ).all()
+    
+    auth_status = {
+        auth.provider: {
+            "is_authenticated": True,
+            "folder_id": auth.folder_id,
+            "expires_at": auth.token_expires_at.isoformat() if auth.token_expires_at else None
+        }
+        for auth in cloud_auths
+    }
+    
+    return {
+        "config": config,
+        "cloud_auth_status": auth_status
+    }
+
+@router.post("/storage-config")
+async def update_storage_config(
+    config_data: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """更新用户存储配置"""
+    from app.services.storage_strategy_service import StorageStrategyService
+    strategy_service = StorageStrategyService()
+    
+    result = await strategy_service.update_storage_config(
+        str(current_user.id), config_data, db
+    )
+    
+    return result
+
+# 需要添加的导入
+from app.models import User, CloudAuth
+from app.api.auth import get_current_user
+

@@ -1,9 +1,9 @@
 from fastapi import FastAPI, Request
-from app.api import ingest, search, operator, qa, agent, document, embedding, category, collection, files, files_improved
+from app.api import ingest, search, operator, qa, agent, document, embedding, category, collection, files, files_improved, auth
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from app.db import engine, Base
-from app.models import Content, Chunk, QAHistory, AgentTask, MCPTool, OpsLog, Category, ContentCategory, Collection
+from app.models import Content, Chunk, QAHistory, AgentTask, MCPTool, OpsLog, Category, ContentCategory, Collection, User, CloudAuth, StorageConfig
 from starlette.middleware.base import BaseHTTPMiddleware
 import logging
 import os
@@ -50,6 +50,20 @@ def initialize_system_data():
 
 # 执行系统初始化
 initialize_system_data()
+
+# 初始化默认用户
+def initialize_default_user():
+    """初始化默认用户"""
+    try:
+        from app.scripts.init_default_user import create_default_user, migrate_existing_content
+        create_default_user()
+        migrate_existing_content()
+        logger.info("✅ Default user initialization completed")
+    except Exception as e:
+        logger.error(f"❌ Error during default user initialization: {e}")
+
+# 执行默认用户初始化
+initialize_default_user()
 
 class ProxyHeadersMiddleware(BaseHTTPMiddleware):
     """处理代理头的中间件，确保FastAPI正确识别HTTPS协议"""
@@ -114,6 +128,7 @@ app.include_router(collection.router, prefix="/api/collection", tags=["collectio
 app.include_router(files.router, prefix="/api/files", tags=["files"])
 app.include_router(files_improved.router, prefix="/api/files_improved", tags=["files_improved"])
 app.include_router(operator.router, prefix="/api/operator", tags=["operator"])
+app.include_router(auth.router, prefix="/api", tags=["auth"])
 
 @app.get("/", include_in_schema=False)
 def root():

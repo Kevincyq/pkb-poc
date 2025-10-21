@@ -178,7 +178,7 @@ services:
             echo "$$(date): PKB scan failed or no new files: $$response"
           fi
           echo "$$(date): Sleeping for 5 minutes..."
-          sleep 300
+          sleep 60
         done
     depends_on:
       pkb-backend:
