@@ -83,18 +83,26 @@ class StorageStrategyService:
         config = await self.get_storage_config(user_id, db)
         threshold = config["large_file_threshold"]
         
+        logger.info(f"Storage strategy decision: file_size={file_size}, threshold={threshold}, user_id={user_id}")
+        
         if file_size >= threshold:
             # 大文件存云盘
             provider = preferred_provider or config["default_cloud_provider"]
+            logger.info(f"File size >= threshold, using provider: {provider}")
             
             # 检查用户是否已认证该云盘
+            import uuid
+            user_uuid = uuid.UUID(user_id)
             cloud_auth = db.query(CloudAuth).filter(
-                CloudAuth.user_id == user_id,
+                CloudAuth.user_id == user_uuid,
                 CloudAuth.provider == provider,
                 CloudAuth.is_active == True
             ).first()
             
+            logger.info(f"Cloud auth found: {cloud_auth is not None}")
+            
             if not cloud_auth:
+                logger.warning(f"No cloud auth found for user {user_id} and provider {provider}")
                 return {
                     "strategy": "require_auth",
                     "provider": provider,
@@ -102,6 +110,7 @@ class StorageStrategyService:
                     "available_providers": self._get_available_providers(user_id, db)
                 }
             
+            logger.info(f"Returning cloud strategy with folder_id: {cloud_auth.folder_id}")
             return {
                 "strategy": "cloud",
                 "provider": provider,
@@ -110,6 +119,7 @@ class StorageStrategyService:
             }
         else:
             # 小文件存本地
+            logger.info(f"File size < threshold, using local storage")
             return {
                 "strategy": "local",
                 "path": "/app/uploads"
