@@ -387,12 +387,20 @@ async def logout():
     return {"success": True, "message": "登出成功"}
 
 @router.get("/cloud/providers")
-async def get_cloud_providers(current_user: User = Depends(get_current_user)):
+async def get_cloud_providers(current_user: User = Depends(get_current_user), 
+                            db: Session = Depends(get_db)):
     """获取可用的云盘提供商列表"""
     providers = []
     
     # 根据用户类型返回可用提供商
-    if current_user.google_id:
+    # 检查是否有Google Drive认证记录
+    google_auth = db.query(CloudAuth).filter(
+        CloudAuth.user_id == current_user.id,
+        CloudAuth.provider == "google_drive",
+        CloudAuth.is_active == True
+    ).first()
+    
+    if google_auth:
         # Google用户只能使用Google Drive
         providers.append({
             "provider": "google_drive",
@@ -417,38 +425,30 @@ async def get_cloud_status(current_user: User = Depends(get_current_user),
     """获取云盘连接状态"""
     status = {}
     
-    # 根据用户类型检查对应云盘状态
-    if current_user.google_id:
-        # Google用户检查Google Drive状态
-        cloud_auth = db.query(CloudAuth).filter(
-            CloudAuth.user_id == current_user.id,
-            CloudAuth.provider == "google_drive",
-            CloudAuth.is_active == True
-        ).first()
-        
-        if cloud_auth:
+    # 检查用户的云盘认证状态
+    cloud_auths = db.query(CloudAuth).filter(
+        CloudAuth.user_id == current_user.id,
+        CloudAuth.is_active == True
+    ).all()
+    
+    for auth in cloud_auths:
+        if auth.provider == "google_drive":
             status["google_drive"] = {
                 "connected": True,
-                "folder_id": cloud_auth.folder_id,
-                "expires_at": cloud_auth.token_expires_at.isoformat() if cloud_auth.token_expires_at else None
+                "folder_id": auth.folder_id,
+                "expires_at": auth.token_expires_at.isoformat() if auth.token_expires_at else None
             }
-        else:
-            status["google_drive"] = {"connected": False}
-    else:
-        # Test用户检查Nextcloud状态
-        cloud_auth = db.query(CloudAuth).filter(
-            CloudAuth.user_id == current_user.id,
-            CloudAuth.provider == "nextcloud",
-            CloudAuth.is_active == True
-        ).first()
-        
-        if cloud_auth:
+        elif auth.provider == "nextcloud":
             status["nextcloud"] = {
                 "connected": True,
-                "folder_id": cloud_auth.folder_id
+                "folder_id": auth.folder_id
             }
-        else:
-            status["nextcloud"] = {"connected": False}
+    
+    # 如果没有找到认证记录，设置默认状态
+    if "google_drive" not in status:
+        status["google_drive"] = {"connected": False}
+    if "nextcloud" not in status:
+        status["nextcloud"] = {"connected": False}
     
     return status
 
