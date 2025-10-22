@@ -78,13 +78,19 @@ class GoogleDriveConnector(CloudStorageConnector):
                     raise Exception(f"Token exchange failed: {response.text}")
                 
                 token_info = response.json()
+                logger.info(f"Token exchange successful, access_token: {token_info.get('access_token', 'N/A')[:20]}...")
                 
                 # 获取用户信息
                 headers = {'Authorization': f"Bearer {token_info['access_token']}"}
+                logger.info(f"Requesting user info with headers: {headers}")
+                
                 user_response = await client.get(
-                    'https://www.googleapis.com/oauth2/v2/userinfo',
+                    'https://www.googleapis.com/oauth2/v1/userinfo',
                     headers=headers
                 )
+                
+                logger.info(f"User info response status: {user_response.status_code}")
+                logger.info(f"User info response: {user_response.text}")
                 
                 if user_response.status_code != 200:
                     raise Exception(f"Failed to get user info: {user_response.text}")
