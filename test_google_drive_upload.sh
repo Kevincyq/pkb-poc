@@ -61,20 +61,24 @@ upload_file() {
     echo "$UPLOAD_RESPONSE" | python3 -m json.tool 2>/dev/null || echo "$UPLOAD_RESPONSE"
     echo ""
     
-    # 提取文件ID
+    # 提取Content ID和文件ID
+    CONTENT_ID=$(echo "$UPLOAD_RESPONSE" | grep -o '"content_id":"[^"]*"' | cut -d'"' -f4)
     FILE_ID=$(echo "$UPLOAD_RESPONSE" | grep -o '"file_id":"[^"]*"' | cut -d'"' -f4)
-    if [ ! -z "$FILE_ID" ]; then
-        echo "✅ 文件上传成功，ID: $FILE_ID"
+    
+    if [ ! -z "$CONTENT_ID" ]; then
+        echo "✅ 文件上传成功，Content ID: $CONTENT_ID"
         
-        # 提取存储提供商
-        STORAGE_PROVIDER=$(echo "$UPLOAD_RESPONSE" | grep -o '"storage_provider":"[^"]*"' | cut -d'"' -f4)
-        echo "📦 存储提供商: $STORAGE_PROVIDER"
+        # 提取存储策略和提供商
+        STORAGE_STRATEGY=$(echo "$UPLOAD_RESPONSE" | grep -o '"storage_strategy":"[^"]*"' | cut -d'"' -f4)
+        PROVIDER=$(echo "$UPLOAD_RESPONSE" | grep -o '"provider":"[^"]*"' | cut -d'"' -f4)
+        echo "📦 存储策略: $STORAGE_STRATEGY"
+        echo "☁️ 云盘提供商: $PROVIDER"
         
-        # 测试下载
+        # 测试下载（使用文件名而不是ID）
         echo "📥 测试文件下载..."
         DOWNLOAD_FILE="downloaded_${file_name}"
         curl -s -H "Authorization: Bearer $JWT_TOKEN" \
-          "$BASE_URL/api/files/$FILE_ID" \
+          "$BASE_URL/api/files/$file_name" \
           -o "$DOWNLOAD_FILE"
         
         if [ -f "$DOWNLOAD_FILE" ]; then
@@ -87,6 +91,20 @@ upload_file() {
                 head -10 "$DOWNLOAD_FILE"
                 if [ $(wc -l < "$DOWNLOAD_FILE") -gt 10 ]; then
                     echo "... (显示前10行)"
+                fi
+            fi
+            
+            # 测试缩略图（如果是图片文件）
+            if [[ "$file_name" == *.jpg ]] || [[ "$file_name" == *.jpeg ]] || [[ "$file_name" == *.png ]] || [[ "$file_name" == *.gif ]]; then
+                echo "🖼️ 测试缩略图生成..."
+                curl -s -H "Authorization: Bearer $JWT_TOKEN" \
+                  "$BASE_URL/api/files/thumbnail/$file_name" \
+                  -o "thumbnail_${file_name}"
+                
+                if [ -f "thumbnail_${file_name}" ]; then
+                    echo "✅ 缩略图生成成功"
+                else
+                    echo "❌ 缩略图生成失败"
                 fi
             fi
         else
@@ -114,10 +132,10 @@ fi
 # 清理测试文件
 if [ -z "$CUSTOM_FILE" ]; then
     echo "🧹 清理测试文件..."
-    rm -f test_file.txt test_english.txt hello_world.txt downloaded_*.txt
+    rm -f test_file.txt test_english.txt hello_world.txt downloaded_*.txt thumbnail_*
 else
     echo "🧹 清理下载文件..."
-    rm -f downloaded_*
+    rm -f downloaded_* thumbnail_*
 fi
 
 echo "🎉 Google Drive文件上传测试完成！"
