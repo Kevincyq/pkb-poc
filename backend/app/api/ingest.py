@@ -682,7 +682,7 @@ async def upload_file_smart(
             # 本地文件立即触发解析
             from app.workers.tasks import parse_and_chunk_file
             parse_and_chunk_file.apply_async(
-                args=[str(content_record.id)],
+                args=[str(content_record.id), result.get("file_path", "")],
                 queue='quick'
             )
         else:

@@ -84,6 +84,8 @@ upload_file() {
         if [ -f "$DOWNLOAD_FILE" ]; then
             echo "✅ 文件下载成功"
             echo "下载文件: $DOWNLOAD_FILE"
+            echo "文件大小: $(ls -lh "$DOWNLOAD_FILE" | awk '{print $5}')"
+            echo "文件位置: $(pwd)/$DOWNLOAD_FILE"
             
             # 如果是文本文件，显示内容
             if [[ "$file_name" == *.txt ]] || [[ "$file_name" == *.md ]] || [[ "$file_name" == *.log ]]; then
@@ -103,6 +105,7 @@ upload_file() {
                 
                 if [ -f "thumbnail_${file_name}" ]; then
                     echo "✅ 缩略图生成成功"
+                    echo "缩略图位置: $(pwd)/thumbnail_${file_name}"
                 else
                     echo "❌ 缩略图生成失败"
                 fi
@@ -140,7 +143,13 @@ fi
 
 echo "🎉 Google Drive文件上传测试完成！"
 echo ""
+echo "📁 下载的文件位置："
+echo "   - 当前目录: $(pwd)"
+echo "   - 下载文件: downloaded_*"
+echo "   - 缩略图: thumbnail_*"
+echo ""
 echo "💡 提示："
 echo "   - 检查Google Drive中的PKB-Files文件夹"
 echo "   - 验证文件是否正确上传"
 echo "   - 测试文件搜索功能"
+echo "   - 下载的文件已保存在当前目录"
