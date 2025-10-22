@@ -173,7 +173,7 @@ async def google_auth():
 
 @router.get("/auth/callback/gdrive")
 async def google_callback(code: str, state: str, db: Session = Depends(get_db)):
-    """Google OAuth回调处理"""
+    """Google OAuth回调处理 - 简化版本，只处理Drive访问权限"""
     try:
         connector_service = CloudConnectorService()
         google_connector = connector_service.get_connector("google_drive")
@@ -184,25 +184,24 @@ async def google_callback(code: str, state: str, db: Session = Depends(get_db)):
         if not callback_result["success"]:
             raise HTTPException(status_code=400, detail=f"OAuth回调失败: {callback_result.get('error')}")
         
-        user_info = callback_result["user_info"]
+        # 获取Drive用户邮箱
+        drive_user_email = callback_result.get("drive_user_email", "unknown")
         
-        # 查找或创建用户（基于Google ID）
-        user = db.query(User).filter(User.google_id == user_info["id"]).first()
+        # 查找或创建用户（基于邮箱）
+        user = db.query(User).filter(User.email == drive_user_email).first()
         
         if not user:
-            # 自动创建Google用户
+            # 创建Google Drive用户（简化版本）
             user = User(
-                google_id=user_info["id"],
-                email=user_info["email"],
-                display_name=user_info.get("name", user_info["email"].split("@")[0]),
-                avatar_url=user_info.get("picture"),
+                email=drive_user_email,
+                display_name=drive_user_email.split("@")[0],  # 使用邮箱前缀作为显示名
                 is_active=True
             )
             db.add(user)
             db.commit()
             db.refresh(user)
             
-            # 创建默认存储配置（Google用户默认使用Google Drive）
+            # 创建默认存储配置（Google Drive用户默认使用Google Drive）
             default_configs = [
                 ("large_file_threshold", 5 * 1024 * 1024),  # 5MB
                 ("default_cloud_provider", "google_drive"),
@@ -219,11 +218,6 @@ async def google_callback(code: str, state: str, db: Session = Depends(get_db)):
                     config_value=value
                 )
                 db.add(config)
-        else:
-            # 更新用户信息
-            user.display_name = user_info.get("name", user.display_name)
-            user.avatar_url = user_info.get("picture", user.avatar_url)
-            user.updated_at = datetime.utcnow()
             db.commit()
         
         # 存储云盘认证信息
@@ -268,9 +262,11 @@ async def google_callback(code: str, state: str, db: Session = Depends(get_db)):
                 "id": str(user.id),
                 "email": user.email,
                 "display_name": user.display_name,
-                "avatar_url": user.avatar_url
+                "avatar_url": user.avatar_url,
+                "is_google_user": True
             },
             "token": jwt_token,
+            "drive_access_confirmed": True,
             "redirect_url": "/dashboard"
         }
         

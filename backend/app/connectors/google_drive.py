@@ -57,7 +57,7 @@ class GoogleDriveConnector(CloudStorageConnector):
         }
     
     async def handle_callback(self, code: str, state: str) -> Dict[str, Any]:
-        """处理Google OAuth回调"""
+        """处理Google OAuth回调 - 简化版本，只关注Drive访问权限"""
         try:
             # 用code换取token
             token_data = {
@@ -69,6 +69,7 @@ class GoogleDriveConnector(CloudStorageConnector):
             }
             
             async with httpx.AsyncClient() as client:
+                # 步骤1：换取access_token
                 response = await client.post(
                     'https://oauth2.googleapis.com/token',
                     data=token_data
@@ -78,31 +79,35 @@ class GoogleDriveConnector(CloudStorageConnector):
                     raise Exception(f"Token exchange failed: {response.text}")
                 
                 token_info = response.json()
-                logger.info(f"Token exchange successful, access_token: {token_info.get('access_token', 'N/A')[:20]}...")
+                access_token = token_info['access_token']
+                logger.info(f"Token exchange successful, access_token: {access_token[:20]}...")
                 
-                # 获取用户信息
-                headers = {'Authorization': f"Bearer {token_info['access_token']}"}
-                logger.info(f"Requesting user info with headers: {headers}")
+                # 步骤2：测试Drive API访问权限
+                headers = {'Authorization': f"Bearer {access_token}"}
+                logger.info("Testing Drive API access...")
                 
-                user_response = await client.get(
-                    'https://www.googleapis.com/oauth2/v1/userinfo',
+                drive_response = await client.get(
+                    'https://www.googleapis.com/drive/v3/about?fields=user',
                     headers=headers
                 )
                 
-                logger.info(f"User info response status: {user_response.status_code}")
-                logger.info(f"User info response: {user_response.text}")
+                logger.info(f"Drive API response status: {drive_response.status_code}")
                 
-                if user_response.status_code != 200:
-                    raise Exception(f"Failed to get user info: {user_response.text}")
+                if drive_response.status_code != 200:
+                    raise Exception(f"Drive API access failed: {drive_response.text}")
                 
-                user_info = user_response.json()
+                # 步骤3：获取Drive用户信息（用于确认访问权限）
+                drive_user_info = drive_response.json()
+                user_email = drive_user_info.get('user', {}).get('emailAddress', 'unknown')
+                logger.info(f"Drive access confirmed for user: {user_email}")
                 
                 return {
                     "success": True,
-                    "access_token": token_info['access_token'],
+                    "access_token": access_token,
                     "refresh_token": token_info.get('refresh_token'),
                     "expires_in": token_info.get('expires_in', 3600),
-                    "user_info": user_info
+                    "drive_user_email": user_email,
+                    "drive_access_confirmed": True
                 }
                 
         except Exception as e:
