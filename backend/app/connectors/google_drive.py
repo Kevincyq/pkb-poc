@@ -118,7 +118,7 @@ class GoogleDriveConnector(CloudStorageConnector):
             }
     
     async def create_folder(self, folder_name: str, user_id: str) -> str:
-        """创建PKB专用文件夹"""
+        """创建或获取PKB专用文件夹"""
         try:
             # 从数据库获取用户的access_token
             from sqlalchemy.orm import Session
@@ -136,16 +136,49 @@ class GoogleDriveConnector(CloudStorageConnector):
                 if not cloud_auth or not cloud_auth.access_token:
                     raise Exception("No valid Google Drive access token found")
                 
-                # 创建文件夹的元数据
-                folder_metadata = {
-                    "name": folder_name,
-                    "mimeType": "application/vnd.google-apps.folder"
-                }
+                # 如果已经有folder_id，直接返回
+                if cloud_auth.folder_id:
+                    logger.info(f"Using existing Google Drive folder: {cloud_auth.folder_id}")
+                    return cloud_auth.folder_id
                 
+                # 检查是否已存在同名文件夹
                 async with httpx.AsyncClient() as client:
                     headers = {
                         'Authorization': f"Bearer {cloud_auth.access_token}",
                         'Content-Type': 'application/json'
+                    }
+                    
+                    # 搜索已存在的文件夹
+                    search_params = {
+                        'q': f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false",
+                        'fields': 'files(id,name)'
+                    }
+                    
+                    search_response = await client.get(
+                        'https://www.googleapis.com/drive/v3/files',
+                        headers=headers,
+                        params=search_params
+                    )
+                    
+                    if search_response.status_code == 200:
+                        search_data = search_response.json()
+                        existing_folders = search_data.get('files', [])
+                        
+                        # 如果找到同名文件夹，使用第一个
+                        if existing_folders:
+                            folder_id = existing_folders[0]['id']
+                            logger.info(f"Found existing Google Drive folder: {folder_id}")
+                            
+                            # 更新数据库中的folder_id
+                            cloud_auth.folder_id = folder_id
+                            db.commit()
+                            
+                            return folder_id
+                    
+                    # 如果没有找到现有文件夹，创建新文件夹
+                    folder_metadata = {
+                        "name": folder_name,
+                        "mimeType": "application/vnd.google-apps.folder"
                     }
                     
                     response = await client.post(
@@ -160,7 +193,12 @@ class GoogleDriveConnector(CloudStorageConnector):
                     folder_data = response.json()
                     folder_id = folder_data['id']
                     
-                    logger.info(f"Created Google Drive folder: {folder_id}")
+                    logger.info(f"Created new Google Drive folder: {folder_id}")
+                    
+                    # 更新数据库中的folder_id
+                    cloud_auth.folder_id = folder_id
+                    db.commit()
+                    
                     return folder_id
                     
             finally:

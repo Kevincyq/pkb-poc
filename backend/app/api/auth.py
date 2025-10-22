@@ -245,13 +245,13 @@ async def google_callback(code: str, state: str, db: Session = Depends(get_db)):
             cloud_auth.updated_at = datetime.utcnow()
             db.commit()
         
-        # 创建Google Drive专用文件夹
+        # 创建或获取Google Drive专用文件夹
         try:
             folder_id = await google_connector.create_folder("PKB-Files", str(user.id))
-            cloud_auth.folder_id = folder_id
-            db.commit()
+            # create_folder方法内部已经更新了cloud_auth.folder_id，这里不需要再次设置
+            logger.info(f"Google Drive folder ready: {folder_id}")
         except Exception as e:
-            logger.warning(f"Failed to create Google Drive folder: {e}")
+            logger.warning(f"Failed to create/get Google Drive folder: {e}")
         
         # 生成JWT token
         jwt_token = create_jwt_token(user)
