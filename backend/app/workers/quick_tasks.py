@@ -51,8 +51,8 @@ def quick_classify_content(content_id: str):
         # 初始化快速分类服务
         quick_service = QuickClassificationService(db)
         
-        # 执行快速分类（后台执行，不更新show_classification状态）
-        result = quick_service.quick_classify(content_id, update_display=False)
+        # 执行快速分类（立即显示给用户）
+        result = quick_service.quick_classify(content_id, update_display=True)
         
         # 更新分类状态
         if content and content.meta:

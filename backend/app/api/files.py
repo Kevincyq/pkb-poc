@@ -299,42 +299,136 @@ def get_or_create_thumbnail(image_path: Path, requested_filename: str = None) ->
 @router.get("/thumbnail/{filename}")
 async def get_file_thumbnail(filename: str, db: Session = Depends(get_db)):
     """
-    获取文件缩略图（持久化策略）
+    获取文件缩略图（支持云盘文件）
     """
     try:
         logger.info(f"Requesting thumbnail for: {filename}")
         
-        file_path = get_file_path(filename, db)
-        logger.info(f"Found file path: {file_path}")
+        # 查找Content记录
+        content = None
         
-        if not file_path.exists():
-            logger.error(f"File does not exist: {file_path}")
+        # 1. 通过title查找
+        content = db.query(Content).filter(Content.title == filename).first()
+        
+        # 2. 通过source_uri查找
+        if not content:
+            content = db.query(Content).filter(
+                Content.source_uri == f"webui://{filename}"
+            ).first()
+        
+        # 3. 通过cloud_file_id查找
+        if not content and len(filename) > 20:
+            content = db.query(Content).filter(Content.cloud_file_id == filename).first()
+        
+        if not content:
             raise HTTPException(status_code=404, detail=f"文件不存在: {filename}")
         
         # 检查是否是支持的图片格式
-        file_extension = file_path.suffix.lower()
+        file_extension = Path(content.title).suffix.lower()
         if file_extension not in SUPPORTED_IMAGE_FORMATS:
-            logger.error(f"Unsupported image format: {file_extension}")
             raise HTTPException(status_code=400, detail=f"不支持的图片格式: {file_extension}")
         
-        # 获取或创建缩略图，传入请求的文件名以确保缓存一致性
-        thumbnail_path = get_or_create_thumbnail(file_path, filename)
-        logger.info(f"Generated thumbnail path: {thumbnail_path}")
+        # 根据存储策略处理缩略图
+        if content.storage_provider == "google_drive":
+            # 从Google Drive下载文件并生成缩略图
+            from app.services.cloud_connector_service import CloudConnectorService
+            connector_service = CloudConnectorService()
+            
+            file_content = await connector_service.download_from_cloud(
+                content.cloud_file_id, str(content.user_id), "google_drive"
+            )
+            
+            # 创建临时文件
+            import tempfile
+            import os
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=file_extension)
+            temp_file.write(file_content)
+            temp_file.close()
+            
+            try:
+                # 生成缩略图
+                thumbnail_path = get_or_create_thumbnail(Path(temp_file.name), filename)
+                
+                if not thumbnail_path or not thumbnail_path.exists():
+                    raise HTTPException(status_code=500, detail="缩略图生成失败")
+                
+                # 读取缩略图内容
+                with open(thumbnail_path, 'rb') as f:
+                    thumbnail_content = f.read()
+                
+                return Response(
+                    content=thumbnail_content,
+                    media_type="image/jpeg",
+                    headers={
+                        "Cache-Control": "public, max-age=86400",
+                        "Content-Disposition": f"inline; filename=thumbnail_{content.title}"
+                    }
+                )
+                
+            finally:
+                # 清理临时文件
+                if os.path.exists(temp_file.name):
+                    os.unlink(temp_file.name)
         
-        if not thumbnail_path or not thumbnail_path.exists():
-            logger.error(f"Failed to create thumbnail: {thumbnail_path}")
-            raise HTTPException(status_code=500, detail="缩略图生成失败")
+        elif content.storage_provider == "nextcloud":
+            # Nextcloud文件缩略图处理
+            from app.services.cloud_connector_service import CloudConnectorService
+            connector_service = CloudConnectorService()
+            
+            file_content = await connector_service.download_from_cloud(
+                content.cloud_file_id, str(content.user_id), "nextcloud"
+            )
+            
+            # 类似Google Drive的处理逻辑
+            import tempfile
+            import os
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=file_extension)
+            temp_file.write(file_content)
+            temp_file.close()
+            
+            try:
+                thumbnail_path = get_or_create_thumbnail(Path(temp_file.name), filename)
+                
+                if not thumbnail_path or not thumbnail_path.exists():
+                    raise HTTPException(status_code=500, detail="缩略图生成失败")
+                
+                with open(thumbnail_path, 'rb') as f:
+                    thumbnail_content = f.read()
+                
+                return Response(
+                    content=thumbnail_content,
+                    media_type="image/jpeg",
+                    headers={
+                        "Cache-Control": "public, max-age=86400",
+                        "Content-Disposition": f"inline; filename=thumbnail_{content.title}"
+                    }
+                )
+                
+            finally:
+                if os.path.exists(temp_file.name):
+                    os.unlink(temp_file.name)
         
-        # 返回缩略图文件
-        return FileResponse(
-            path=str(thumbnail_path),
-            media_type="image/jpeg",
-            filename=f"thumbnail_{filename}",
-            headers={
-                "Cache-Control": "public, max-age=86400",  # 缓存24小时
-                "ETag": f'"{thumbnail_path.stat().st_mtime}"'  # 使用修改时间作为ETag
-            }
-        )
+        else:
+            # 本地文件处理
+            file_path = get_file_path(filename, db)
+            
+            if not file_path.exists():
+                raise HTTPException(status_code=404, detail=f"文件不存在: {filename}")
+            
+            thumbnail_path = get_or_create_thumbnail(file_path, filename)
+            
+            if not thumbnail_path or not thumbnail_path.exists():
+                raise HTTPException(status_code=500, detail="缩略图生成失败")
+            
+            return FileResponse(
+                path=str(thumbnail_path),
+                media_type="image/jpeg",
+                filename=f"thumbnail_{filename}",
+                headers={
+                    "Cache-Control": "public, max-age=86400",
+                    "ETag": f'"{thumbnail_path.stat().st_mtime}"'
+                }
+            )
         
     except HTTPException:
         raise
@@ -350,10 +444,21 @@ async def get_file(filename: str, db: Session = Depends(get_db)):
     try:
         logger.debug(f"🔍 Requesting file: {filename}")
         
-        # 查找Content记录
-        content = db.query(Content).filter(
-            Content.title == filename
-        ).first()
+        # 查找Content记录 - 支持多种查找方式
+        content = None
+        
+        # 1. 通过title查找
+        content = db.query(Content).filter(Content.title == filename).first()
+        
+        # 2. 通过source_uri查找
+        if not content:
+            content = db.query(Content).filter(
+                Content.source_uri == f"webui://{filename}"
+            ).first()
+        
+        # 3. 通过cloud_file_id查找（如果是文件ID）
+        if not content and len(filename) > 20:  # Google Drive文件ID通常很长
+            content = db.query(Content).filter(Content.cloud_file_id == filename).first()
         
         if not content:
             raise HTTPException(status_code=404, detail=f"文件不存在: {filename}")
@@ -369,7 +474,7 @@ async def get_file(filename: str, db: Session = Depends(get_db)):
             )
             
             # 判断文件类型
-            file_extension = Path(filename).suffix.lower()
+            file_extension = Path(content.title).suffix.lower()
             media_type_map = {
                 '.jpg': 'image/jpeg',
                 '.jpeg': 'image/jpeg',
@@ -381,13 +486,22 @@ async def get_file(filename: str, db: Session = Depends(get_db)):
                 '.txt': 'text/plain',
                 '.md': 'text/markdown',
                 '.json': 'application/json',
+                '.doc': 'application/msword',
+                '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                '.ppt': 'application/vnd.ms-powerpoint',
+                '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                '.xls': 'application/vnd.ms-excel',
+                '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             }
             media_type = media_type_map.get(file_extension, 'application/octet-stream')
             
             return Response(
                 content=file_content,
                 media_type=media_type,
-                headers={"Content-Disposition": f"attachment; filename={filename}"}
+                headers={
+                    "Content-Disposition": f"attachment; filename={content.title}",
+                    "Cache-Control": "public, max-age=3600"
+                }
             )
         
         elif content.storage_provider == "nextcloud":

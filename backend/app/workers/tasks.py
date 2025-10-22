@@ -275,12 +275,12 @@ def ingest_file(path: str):
             chunk_ids_str = [str(cid) for cid in chunk_ids]
             generate_embeddings.delay(chunk_ids_str)
         
-        # 异步进行精确AI分类（较低优先级，会覆盖快速分类）
+        # 异步进行精确AI分类（优化延迟时间）
         classify_content.apply_async(
             args=[str(content.id)], 
             queue="classify", 
             priority=5,
-            countdown=30  # 延迟30秒执行，让用户先看到快速分类结果
+            countdown=8  # 延迟8秒执行，确保快速分类完成且用户能看到结果
         )
         
         result = {
@@ -566,6 +566,166 @@ def process_image_content(content_id: str):
             
     except Exception as e:
         logger.error(f"Error in process_image_content task: {e}")
+        return {"success": False, "error": str(e)}
+    finally:
+        db.close()
+
+@celery_app.task(name="app.workers.tasks.download_and_parse_cloud_file", queue="heavy")
+def download_and_parse_cloud_file(content_id: str):
+    """
+    异步下载云盘文件并解析内容
+    
+    Args:
+        content_id: 内容ID
+    """
+    db = SessionLocal()
+    try:
+        logger.info(f"🔍 Starting cloud file download and parsing for content {content_id}")
+        
+        # 获取内容记录
+        content = db.query(Content).filter(Content.id == content_id).first()
+        if not content:
+            logger.error(f"Content {content_id} not found")
+            return {"status": "error", "message": "Content not found"}
+        
+        # 更新状态为解析中
+        if content.meta:
+            content.meta["parsing_status"] = "parsing"
+            content.meta["processing_status"] = "parsing"
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(content, 'meta')
+        db.commit()
+        
+        # 根据存储提供商下载文件
+        if content.storage_provider == "google_drive":
+            from app.connectors.google_drive import GoogleDriveConnector
+            connector = GoogleDriveConnector()
+            
+            # 下载文件内容
+            import asyncio
+            file_content = asyncio.run(connector.download_file(content.cloud_file_id, str(content.user_id)))
+            if not file_content:
+                raise Exception("Failed to download file from Google Drive")
+            
+            # 创建临时文件
+            import tempfile
+            import os
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=f"_{content.title}")
+            temp_file.write(file_content)
+            temp_file.close()
+            
+            try:
+                # 解析文件内容
+                processor = DocumentProcessor()
+                parse_result = processor.process_file(temp_file.name, content.title)
+                
+                if parse_result.get('success', True) and parse_result.get('text'):
+                    # 更新内容
+                    content.text = parse_result['text']
+                    content.meta = parse_result.get('metadata', {})
+                    content.meta["parsing_status"] = "completed"
+                    content.meta["processing_status"] = "completed"
+                    content.meta["chunks_count"] = len(parse_result.get('chunks', []))
+                    
+                    # 标记meta字段为已修改
+                    from sqlalchemy.orm.attributes import flag_modified
+                    flag_modified(content, 'meta')
+                    db.commit()
+                    
+                    # 创建文本分块
+                    chunks = parse_result.get('chunks', [])
+                    chunk_ids = []
+                    
+                    for seq, chunk_text in enumerate(chunks):
+                        from app.models import Chunk
+                        chunk = Chunk(
+                            content_id=content.id,
+                            seq=seq,
+                            text=chunk_text,
+                            meta={
+                                "source_uri": content.source_uri,
+                                "chunk_index": seq,
+                                "total_chunks": len(chunks)
+                            }
+                        )
+                        db.add(chunk)
+                        chunk_ids.append(chunk.id)
+                    
+                    db.commit()
+                    
+                    # 生成嵌入向量
+                    if chunk_ids:
+                        chunk_ids_str = [str(cid) for cid in chunk_ids]
+                        generate_embeddings.apply_async(
+                            args=[chunk_ids_str],
+                            queue='heavy'
+                        )
+                    
+                    # 异步进行快速分类
+                    from app.workers.quick_tasks import quick_classify_content
+                    quick_classify_content.apply_async(
+                        args=[str(content.id)], 
+                        queue="quick", 
+                        priority=9
+                    )
+                    
+                    # 异步进行精确AI分类（延迟30秒）
+                    classify_content.apply_async(
+                        args=[str(content.id)], 
+                        queue="classify", 
+                        priority=5,
+                        countdown=30
+                    )
+                    
+                    logger.info(f"Successfully processed cloud file: {content.title}")
+                    return {"success": True, "chunks_count": len(chunks)}
+                else:
+                    raise Exception(f"Failed to parse file: {parse_result.get('error', 'Unknown error')}")
+                    
+            finally:
+                # 清理临时文件
+                if os.path.exists(temp_file.name):
+                    os.unlink(temp_file.name)
+                    
+        elif content.storage_provider == "nextcloud":
+            # Nextcloud文件处理逻辑
+            download_url = content.meta.get('download_url')
+            if not download_url:
+                raise Exception("No download URL for Nextcloud file")
+            
+            from app.adapters.webdav import download_and_parse_file
+            parse_result = download_and_parse_file(download_url, content.title)
+            
+            if parse_result.get('success', True) and parse_result.get('text'):
+                # 更新内容
+                content.text = parse_result['text']
+                content.meta.update(parse_result.get('metadata', {}))
+                content.meta["parsing_status"] = "completed"
+                content.meta["processing_status"] = "completed"
+                
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(content, 'meta')
+                db.commit()
+                
+                logger.info(f"Successfully processed Nextcloud file: {content.title}")
+                return {"success": True}
+            else:
+                raise Exception(f"Failed to parse Nextcloud file: {parse_result.get('error', 'Unknown error')}")
+        else:
+            raise Exception(f"Unsupported storage provider: {content.storage_provider}")
+            
+    except Exception as e:
+        logger.error(f"Error in download_and_parse_cloud_file task: {e}")
+        
+        # 更新错误状态
+        if content and content.meta:
+            content.meta["parsing_status"] = "failed"
+            content.meta["processing_status"] = "failed"
+            content.meta["error"] = str(e)
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(content, 'meta')
+            db.commit()
+        
         return {"success": False, "error": str(e)}
     finally:
         db.close()

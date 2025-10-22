@@ -249,13 +249,13 @@ def ingest_scan(db: Session = Depends(get_db)):
                 priority=9
             )
             
-            # 延迟进行精确AI分类
+            # 延迟进行精确AI分类（优化延迟时间）
             from app.workers.tasks import batch_classify_contents
             batch_classify_contents.apply_async(
                 args=[text_content_ids, True],  # force_reclassify=True
                 queue="classify", 
                 priority=5,
-                countdown=30
+                countdown=8  # 延迟8秒执行，确保快速分类完成
             )
         
         # 异步处理图片文件

@@ -53,7 +53,7 @@ upload_file() {
     echo "文件: $file_name"
     echo "路径: $file_path"
     
-    UPLOAD_RESPONSE=$(curl -s -X POST "$BASE_URL/api/upload-smart" \
+    UPLOAD_RESPONSE=$(curl -s -X POST "$BASE_URL/api/ingest/upload-smart" \
       -H "Authorization: Bearer $JWT_TOKEN" \
       -F "file=@$file_path")
     
