@@ -215,6 +215,7 @@ class GoogleDriveConnector(CloudStorageConnector):
             from sqlalchemy.orm import Session
             from app.db import SessionLocal
             from app.models import CloudAuth
+            from datetime import datetime
             
             db = SessionLocal()
             try:
@@ -229,6 +230,16 @@ class GoogleDriveConnector(CloudStorageConnector):
                 
                 if not cloud_auth.folder_id:
                     raise Exception("No Google Drive folder ID found")
+                
+                # 检查token是否过期，如果过期则刷新
+                if cloud_auth.token_expires_at and cloud_auth.token_expires_at <= datetime.utcnow():
+                    logger.info(f"Google Drive token expired, refreshing for user: {user_id}")
+                    refresh_success = await self.refresh_token(user_id)
+                    if not refresh_success:
+                        raise Exception("Failed to refresh expired Google Drive token")
+                    
+                    # 重新获取更新后的token
+                    db.refresh(cloud_auth)
                 
                 # 创建文件元数据
                 file_metadata = {
@@ -285,6 +296,7 @@ class GoogleDriveConnector(CloudStorageConnector):
             from sqlalchemy.orm import Session
             from app.db import SessionLocal
             from app.models import CloudAuth
+            from datetime import datetime
             
             db = SessionLocal()
             try:
@@ -296,6 +308,16 @@ class GoogleDriveConnector(CloudStorageConnector):
                 
                 if not cloud_auth or not cloud_auth.access_token:
                     raise Exception("No valid Google Drive access token found")
+                
+                # 检查token是否过期，如果过期则刷新
+                if cloud_auth.token_expires_at and cloud_auth.token_expires_at <= datetime.utcnow():
+                    logger.info(f"Google Drive token expired, refreshing for user: {user_id}")
+                    refresh_success = await self.refresh_token(user_id)
+                    if not refresh_success:
+                        raise Exception("Failed to refresh expired Google Drive token")
+                    
+                    # 重新获取更新后的token
+                    db.refresh(cloud_auth)
                 
                 async with httpx.AsyncClient() as client:
                     headers = {
@@ -374,9 +396,57 @@ class GoogleDriveConnector(CloudStorageConnector):
     async def refresh_token(self, user_id: str) -> bool:
         """刷新Google Drive访问令牌"""
         try:
-            # 这里需要实现实际的token刷新逻辑
-            logger.info(f"Refreshing Google Drive token for user: {user_id}")
-            return True
+            # 从数据库获取用户的refresh_token
+            from sqlalchemy.orm import Session
+            from app.db import SessionLocal
+            from app.models import CloudAuth
+            from datetime import datetime, timedelta
+            
+            db = SessionLocal()
+            try:
+                cloud_auth = db.query(CloudAuth).filter(
+                    CloudAuth.user_id == user_id,
+                    CloudAuth.provider == "google_drive",
+                    CloudAuth.is_active == True
+                ).first()
+                
+                if not cloud_auth or not cloud_auth.refresh_token:
+                    logger.error(f"No refresh token found for user: {user_id}")
+                    return False
+                
+                # 使用refresh_token获取新的access_token
+                token_data = {
+                    'client_id': self.client_id,
+                    'client_secret': self.client_secret,
+                    'refresh_token': cloud_auth.refresh_token,
+                    'grant_type': 'refresh_token'
+                }
+                
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        'https://oauth2.googleapis.com/token',
+                        data=token_data
+                    )
+                    
+                    if response.status_code != 200:
+                        logger.error(f"Token refresh failed: {response.text}")
+                        return False
+                    
+                    token_info = response.json()
+                    new_access_token = token_info['access_token']
+                    expires_in = token_info.get('expires_in', 3600)
+                    
+                    # 更新数据库中的token信息
+                    cloud_auth.access_token = new_access_token
+                    cloud_auth.token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+                    cloud_auth.updated_at = datetime.utcnow()
+                    db.commit()
+                    
+                    logger.info(f"Successfully refreshed Google Drive token for user: {user_id}")
+                    return True
+                    
+            finally:
+                db.close()
             
         except Exception as e:
             logger.error(f"Failed to refresh Google Drive token: {e}")
