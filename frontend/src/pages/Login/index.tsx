@@ -14,7 +14,7 @@ const LoginPage: React.FC = () => {
   const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
 
-  // 处理表单提交
+  // Process form submission
   const handleSubmit = async (values: { username: string; password: string }) => {
     setLoading(true);
     try {
