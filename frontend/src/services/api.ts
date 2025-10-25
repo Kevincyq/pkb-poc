@@ -17,10 +17,14 @@ const baseURL = import.meta.env.VITE_API_BASE_URL ||
     ? '/api'  // 本地开发 - 使用Vite代理
     : '/api'  // 生产环境 - 使用Vercel代理
   );
+
+// 强制使用代理，避免混合内容问题
+const finalBaseURL = baseURL.startsWith('http://') ? '/api' : baseURL;
 console.log('🎯 Selected baseURL:', baseURL);
+console.log('🔧 Final baseURL:', finalBaseURL);
 
 const api = axios.create({
-  baseURL,
+  baseURL: finalBaseURL,
   headers: {
     'Content-Type': 'application/json',
   },
