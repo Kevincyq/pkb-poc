@@ -8,16 +8,5 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ],
-  "headers": [
-    {
-      "source": "/api/:path*",
-      "headers": [
-        {
-          "key": "X-Forwarded-Proto",
-          "value": "http"
-        }
-      ]
-    }
   ]
 }
