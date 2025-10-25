@@ -9,9 +9,9 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'https://pkb.kmchat.cloud',
+        target: 'http://34.247.12.46:8010',
         changeOrigin: true,
-        secure: true,
+        secure: false,
         rewrite: (path) => path
       }
     }

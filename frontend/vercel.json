@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/:path*",
+      "destination": "http://pkb-bak.kmchat.cloud:8010/api/:path*"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

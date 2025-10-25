@@ -14,8 +14,8 @@ console.log('🔍 Environment check:', {
 // 本地开发时的fallback逻辑
 const baseURL = import.meta.env.VITE_API_BASE_URL || 
   (window.location.hostname === 'localhost' 
-    ? 'http://localhost:8003/api'  // 本地开发
-    : 'https://pkb-test.kmchat.cloud/api'  // 默认测试环境
+    ? '/api'  // 本地开发 - 使用Vite代理
+    : '/api'  // 生产环境 - 使用Vercel代理
   );
 console.log('🎯 Selected baseURL:', baseURL);
 
@@ -32,10 +32,10 @@ const api = axios.create({
 // 请求拦截器
 api.interceptors.request.use(
   (config) => {
-    // 强制确保所有请求都使用HTTPS
-    if (config.baseURL && config.baseURL.startsWith('http://')) {
-      config.baseURL = config.baseURL.replace('http://', 'https://');
-      console.log('🔒 Forced HTTPS for baseURL:', config.baseURL);
+    // 自动添加认证头（如果存在token）
+    const token = localStorage.getItem('auth_token');
+    if (token && !config.headers.Authorization) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
     
     console.log('🌐 Making request to:', config.url);
@@ -62,25 +62,19 @@ api.interceptors.response.use(
       console.error('API Error Status:', error.response.status);
       console.error('API Error Headers:', error.response.headers);
       
-      // 处理307重定向到HTTP的问题
-      if (error.response.status === 307 && error.response.headers.location) {
-        const redirectUrl = error.response.headers.location;
-        console.log('🔄 Handling 307 redirect:', redirectUrl);
+      // 处理401未授权错误 - 清除无效token
+      if (error.response.status === 401) {
+        console.log('🔐 401 Unauthorized - clearing invalid token');
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('auth_user');
+        localStorage.removeItem('cloud_connected');
         
-        if (redirectUrl.startsWith('http://')) {
-          // 强制使用HTTPS重新请求
-          const httpsUrl = redirectUrl.replace('http://', 'https://');
-          console.log('🔒 Redirecting to HTTPS:', httpsUrl);
-          
-          try {
-            const newResponse = await api.get(httpsUrl.replace(error.config.baseURL, ''));
-            return newResponse;
-          } catch (retryError) {
-            console.error('❌ HTTPS retry failed:', retryError);
-            return Promise.reject(retryError);
-          }
+        // 如果不在登录页面，重定向到登录页
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
         }
       }
+      
     } else if (error.request) {
       console.error('API Request Error (No Response):', error.request);
     } else {

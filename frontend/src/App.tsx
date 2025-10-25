@@ -1,6 +1,7 @@
 import { ConfigProvider } from 'antd';
 import { Outlet } from 'react-router-dom';
 import zhCN from 'antd/locale/zh_CN';
+import { AuthProvider } from './stores/AuthContext';
 import './App.css';
 
 function App() {
@@ -13,14 +14,16 @@ function App() {
         },
       }}
     >
-      <div style={{
-        minHeight: '100vh',
-        backgroundColor: '#fff',
-        display: 'flex',
-        flexDirection: 'column',
-      }}>
-        <Outlet />
-      </div>
+      <AuthProvider>
+        <div style={{
+          minHeight: '100vh',
+          backgroundColor: '#fff',
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
+          <Outlet />
+        </div>
+      </AuthProvider>
     </ConfigProvider>
   );
 }

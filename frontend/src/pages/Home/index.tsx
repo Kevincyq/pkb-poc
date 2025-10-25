@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Row, Col, Button, message, Upload, Modal, Input, Drawer, Select, Slider, Tag, Progress } from 'antd';
+import { Row, Col, Button, message, Upload, Modal, Input, Drawer, Select, Slider, Tag, Progress, Avatar, Dropdown } from 'antd';
 import NativeTooltip from '../../components/NativeTooltip';
-import { SearchOutlined, PlusOutlined, FileTextOutlined, FilterOutlined, InfoCircleOutlined } from '@ant-design/icons';
+import { SearchOutlined, PlusOutlined, FileTextOutlined, FilterOutlined, InfoCircleOutlined, UserOutlined, LogoutOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '../../stores/AuthContext';
 import MainLayout from '../../components/Layout/MainLayout';
 import CollectionCard from '../../components/Collection/CollectionCard';
 import AIInput from '../../components/AIInput/AIInput';
@@ -29,6 +30,7 @@ type CustomCollection = collectionService.CustomCollection;
 export default function Home() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user, logout, cloudConnected } = useAuth();
   const [categories, setCategories] = useState<Category[]>([]);
   const [customCollections, setCustomCollections] = useState<CustomCollection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -297,6 +299,12 @@ export default function Home() {
 
   const handleAIInput = (value: string) => {
     console.log('AI Input:', value);
+  };
+
+  const handleLogout = () => {
+    logout();
+    message.success('已退出登录');
+    navigate('/login');
   };
 
   const handleCollectionClick = (_categoryId: string, categoryName: string) => {
@@ -786,19 +794,91 @@ export default function Home() {
         alignItems: 'center',
         marginBottom: '32px'
       }}>
-        <h1 className="home-title" style={{
-          margin: 0,
-          fontSize: '18px',
-          fontWeight: '500',
-          color: '#1f1f1f',
-          lineHeight: '28px'
-        }}>
-          个人知识库助理
-        </h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <h1 className="home-title" style={{
+            margin: 0,
+            fontSize: '18px',
+            fontWeight: '500',
+            color: '#1f1f1f',
+            lineHeight: '28px'
+          }}>
+            个人知识库助理
+          </h1>
+          {cloudConnected && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 8px',
+              backgroundColor: '#f6ffed',
+              border: '1px solid #b7eb8f',
+              borderRadius: '6px',
+              fontSize: '12px',
+              color: '#52c41a'
+            }}>
+              <CheckCircleOutlined />
+              <span>云盘已连接</span>
+            </div>
+          )}
+        </div>
         <div className="home-actions" style={{
           display: 'flex',
-          gap: '16px'
+          gap: '16px',
+          alignItems: 'center'
         }}>
+          {/* 用户信息下拉菜单 */}
+          <Dropdown
+            menu={{
+              items: [
+                {
+                  key: 'user-info',
+                  label: (
+                    <div style={{ padding: '8px 0' }}>
+                      <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                        {user?.display_name || user?.email}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>
+                        {user?.is_google_user ? 'Google用户' : '测试用户'}
+                      </div>
+                    </div>
+                  ),
+                  disabled: true,
+                },
+                {
+                  type: 'divider',
+                },
+                {
+                  key: 'logout',
+                  label: '退出登录',
+                  icon: <LogoutOutlined />,
+                  onClick: handleLogout,
+                },
+              ],
+            }}
+            placement="bottomRight"
+            trigger={['click']}
+          >
+            <Button
+              type="text"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '4px 8px',
+                height: 'auto'
+              }}
+            >
+              <Avatar
+                size="small"
+                icon={<UserOutlined />}
+                src={user?.avatar_url}
+                style={{ backgroundColor: '#1677ff' }}
+              />
+              <span style={{ fontSize: '14px', color: '#1f1f1f' }}>
+                {user?.display_name || user?.email}
+              </span>
+            </Button>
+          </Dropdown>
           <Button
             type="text"
             icon={<SearchOutlined style={{ fontSize: '18px' }} />}
