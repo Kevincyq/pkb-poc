@@ -256,13 +256,25 @@ async def google_callback(code: str, state: str, db: Session = Depends(get_db)):
         # 生成JWT token
         jwt_token = create_jwt_token(user)
         
+        # 准备用户信息（直接返回，避免前端再调用API）
+        import urllib.parse
+        import json
+        user_data = {
+            "id": str(user.id),
+            "email": user.email,
+            "display_name": user.display_name,
+            "avatar_url": user.avatar_url,
+            "is_google_user": user.google_id is not None
+        }
+        user_json = json.dumps(user_data)
+        user_param = urllib.parse.quote(user_json)
+        
         # 构建前端URL（使用前端域名而非后端域名）
         frontend_url = os.getenv('FRONTEND_BASE_URL', 'https://test-pkb.kmchat.cloud')
         frontend_url = f"{frontend_url}/auth/callback"
         
-        # 将token和用户信息通过URL参数传递给前端
-        import urllib.parse
-        redirect_url = f"{frontend_url}?token={jwt_token}&success=true"
+        # 将token、用户信息和云盘状态通过URL参数传递给前端
+        redirect_url = f"{frontend_url}?token={jwt_token}&user={user_param}&success=true"
         
         # 返回重定向响应
         return RedirectResponse(url=redirect_url)

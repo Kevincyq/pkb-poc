@@ -35,33 +35,39 @@ const AuthCallback: React.FC = () => {
       }
       
       if (token && success === 'true') {
-        // 保存token
-        console.log('✅ Saving token to localStorage:', token.substring(0, 20) + '...');
-        localStorage.setItem('auth_token', token);
-        localStorage.setItem('cloud_connected', 'true');
+        // 后端已经返回了用户信息，直接保存
+        const userParam = searchParams.get('user');
         
-        // 必须获取用户信息，否则AuthContext认为未认证
-        try {
-          const userInfo = await AuthService.getCurrentUser();
+        if (userParam) {
+          // 解析用户信息
+          const userInfo = JSON.parse(decodeURIComponent(userParam));
+          console.log('✅ User info from backend:', userInfo);
+          
+          // 保存所有认证信息
+          localStorage.setItem('auth_token', token);
           localStorage.setItem('auth_user', JSON.stringify(userInfo));
-          console.log('✅ User info saved:', userInfo);
+          localStorage.setItem('cloud_connected', 'true');
           
           // 更新Context状态
           setCloudConnected(true);
           
-          // 设置成功状态（会显示成功页面）
-          setStatus('success');
-          setMessage('授权成功！');
-          
-          // 短暂显示成功页面后跳转
-          setTimeout(() => {
-            console.log('✅ Redirecting to home page with full reload');
+          // 立即跳转（不需要等待API调用或显示成功页面）
+          console.log('✅ Redirecting to home page with full reload');
+          window.location.href = '/';
+        } else {
+          // 如果没有用户信息，降级为旧逻辑（调用API）
+          console.log('⚠️ No user info in URL, falling back to API call');
+          try {
+            const userInfo = await AuthService.getCurrentUser();
+            localStorage.setItem('auth_user', JSON.stringify(userInfo));
+            localStorage.setItem('cloud_connected', 'true');
+            setCloudConnected(true);
             window.location.href = '/';
-          }, 800); // 显示成功页面800ms
-        } catch (e) {
-          console.error('Failed to get user info:', e);
-          setStatus('error');
-          setError('获取用户信息失败');
+          } catch (e) {
+            console.error('Failed to get user info:', e);
+            setStatus('error');
+            setError('获取用户信息失败');
+          }
         }
         return;
       }
