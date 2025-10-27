@@ -4,6 +4,7 @@ import { Card, Typography, Spin, Alert, Button, Space } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useAuth } from '../../stores/AuthContext';
 import AuthService from '../../services/authService';
+import { parseJWT } from '../../utils/jwt';
 import './AuthCallback.css';
 
 const { Title, Text } = Typography;
@@ -35,39 +36,66 @@ const AuthCallback: React.FC = () => {
       }
       
       if (token && success === 'true') {
-        // 后端已经返回了用户信息，直接保存
-        const userParam = searchParams.get('user');
+        // 保存token
+        console.log('✅ Saving token to localStorage:', token.substring(0, 20) + '...');
+        localStorage.setItem('auth_token', token);
+        localStorage.setItem('cloud_connected', 'true');
         
-        if (userParam) {
-          // 解析用户信息
-          const userInfo = JSON.parse(decodeURIComponent(userParam));
-          console.log('✅ User info from backend:', userInfo);
+        // 从JWT中提取用户信息
+        try {
+          const payload = parseJWT(token);
+          if (!payload) {
+            throw new Error('Failed to parse JWT token');
+          }
           
-          // 保存所有认证信息
-          localStorage.setItem('auth_token', token);
-          localStorage.setItem('auth_user', JSON.stringify(userInfo));
-          localStorage.setItem('cloud_connected', 'true');
-          
-          // 更新Context状态
-          setCloudConnected(true);
-          
-          // 立即跳转（不需要等待API调用或显示成功页面）
-          console.log('✅ Redirecting to home page with full reload');
-          window.location.href = '/';
-        } else {
-          // 如果没有用户信息，降级为旧逻辑（调用API）
-          console.log('⚠️ No user info in URL, falling back to API call');
-          try {
+          // 检查是新JWT（包含完整信息）还是旧JWT（只有user_id和email）
+          if (payload.display_name !== undefined) {
+            // 新JWT：包含完整用户信息
+            const userInfo = {
+              id: payload.user_id,
+              email: payload.email,
+              display_name: payload.display_name,
+              avatar_url: payload.avatar_url,
+              is_google_user: payload.is_google_user
+            };
+            localStorage.setItem('auth_user', JSON.stringify(userInfo));
+            console.log('✅ User info extracted from new JWT:', userInfo);
+            
+            // 更新Context状态
+            setCloudConnected(true);
+            
+            // 设置成功状态（会显示成功页面）
+            setStatus('success');
+            setMessage('授权成功！');
+            
+            // 短暂显示成功页面后跳转
+            setTimeout(() => {
+              console.log('✅ Redirecting to home page with full reload');
+              window.location.href = '/';
+            }, 600);
+          } else {
+            // 旧JWT：调用API获取完整用户信息
+            console.log('⚠️ Old JWT format detected, fetching user info from API');
             const userInfo = await AuthService.getCurrentUser();
             localStorage.setItem('auth_user', JSON.stringify(userInfo));
-            localStorage.setItem('cloud_connected', 'true');
+            console.log('✅ User info fetched from API:', userInfo);
+            
+            // 更新Context状态
             setCloudConnected(true);
-            window.location.href = '/';
-          } catch (e) {
-            console.error('Failed to get user info:', e);
-            setStatus('error');
-            setError('获取用户信息失败');
+            
+            // 设置成功状态
+            setStatus('success');
+            setMessage('授权成功！');
+            
+            setTimeout(() => {
+              console.log('✅ Redirecting to home page with full reload');
+              window.location.href = '/';
+            }, 600);
           }
+        } catch (e) {
+          console.error('Failed to extract user info:', e);
+          setStatus('error');
+          setError('授权信息处理失败');
         }
         return;
       }

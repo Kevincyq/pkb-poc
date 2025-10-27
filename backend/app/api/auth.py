@@ -42,10 +42,13 @@ def verify_password(password: str, password_hash: str) -> bool:
     return hash_password(password) == password_hash
 
 def create_jwt_token(user: User) -> str:
-    """创建JWT token"""
+    """创建JWT token（包含完整用户信息）"""
     payload = {
         "user_id": str(user.id),
         "email": user.email,
+        "display_name": user.display_name or user.email.split("@")[0],  # ✅ 如果为None，使用邮箱前缀
+        "avatar_url": user.avatar_url or None,  # ✅ 显式处理None值
+        "is_google_user": user.google_id is not None,
         "exp": datetime.utcnow() + timedelta(minutes=JWT_EXPIRE_MINUTES)
     }
     return jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
@@ -256,25 +259,13 @@ async def google_callback(code: str, state: str, db: Session = Depends(get_db)):
         # 生成JWT token
         jwt_token = create_jwt_token(user)
         
-        # 准备用户信息（直接返回，避免前端再调用API）
-        import urllib.parse
-        import json
-        user_data = {
-            "id": str(user.id),
-            "email": user.email,
-            "display_name": user.display_name,
-            "avatar_url": user.avatar_url,
-            "is_google_user": user.google_id is not None
-        }
-        user_json = json.dumps(user_data)
-        user_param = urllib.parse.quote(user_json)
-        
         # 构建前端URL（使用前端域名而非后端域名）
         frontend_url = os.getenv('FRONTEND_BASE_URL', 'https://test-pkb.kmchat.cloud')
         frontend_url = f"{frontend_url}/auth/callback"
         
-        # 将token、用户信息和云盘状态通过URL参数传递给前端
-        redirect_url = f"{frontend_url}?token={jwt_token}&user={user_param}&success=true"
+        # 将token和用户信息通过URL参数传递给前端
+        import urllib.parse
+        redirect_url = f"{frontend_url}?token={jwt_token}&success=true"
         
         # 返回重定向响应
         return RedirectResponse(url=redirect_url)

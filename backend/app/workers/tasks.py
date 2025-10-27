@@ -629,15 +629,14 @@ def download_and_parse_cloud_file(content_id: str):
                     content.meta = parse_result.get('metadata', {})
                     content.meta["parsing_status"] = "completed"
                     content.meta["processing_status"] = "completed"
-                    content.meta["chunks_count"] = len(parse_result.get('chunks', []))
                     
                     # 标记meta字段为已修改
                     from sqlalchemy.orm.attributes import flag_modified
                     flag_modified(content, 'meta')
                     db.commit()
                     
-                    # 创建文本分块
-                    chunks = parse_result.get('chunks', [])
+                    # 使用simple_chunk创建文本分块（因为parse_result不包含chunks）
+                    chunks = simple_chunk(parse_result['text'])
                     chunk_ids = []
                     
                     for seq, chunk_text in enumerate(chunks):
@@ -655,6 +654,11 @@ def download_and_parse_cloud_file(content_id: str):
                         db.add(chunk)
                         chunk_ids.append(chunk.id)
                     
+                    db.commit()
+                    
+                    # 更新chunks_count
+                    content.meta["chunks_count"] = len(chunk_ids)
+                    flag_modified(content, 'meta')
                     db.commit()
                     
                     # 生成嵌入向量
@@ -681,7 +685,7 @@ def download_and_parse_cloud_file(content_id: str):
                         countdown=30
                     )
                     
-                    logger.info(f"Successfully processed cloud file: {content.title}")
+                    logger.info(f"✅ Successfully processed cloud file: {content.title} ({len(chunks)} chunks)")
                     return {"success": True, "chunks_count": len(chunks)}
                 else:
                     error_msg = parse_result.get('metadata', {}).get('error', 'Unknown error')
