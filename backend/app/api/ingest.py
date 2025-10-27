@@ -656,7 +656,7 @@ async def upload_file_smart(
             text="",  # 异步解析后填充
             modality='image' if is_image else 'text',
             user_id=current_user.id,
-            storage_provider=result["strategy"],
+            storage_provider=result.get("provider", "local"),  # ✅ 使用实际的provider（google_drive），而不是strategy（cloud）
             cloud_file_id=result.get("file_id"),
             file_size=file_size,
             source_uri=result["source_uri"],
