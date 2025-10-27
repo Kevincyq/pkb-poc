@@ -10,16 +10,10 @@ console.log('🔍 Environment check:', {
 });
 
 // API基础URL配置
-// 优先使用环境变量（Vercel会在构建时注入）
-// 本地开发时的fallback逻辑
-const baseURL = import.meta.env.VITE_API_BASE_URL || 
-  (window.location.hostname === 'localhost' 
-    ? '/api'  // 本地开发 - 使用Vite代理
-    : '/api'  // 生产环境 - 使用Vercel代理
-  );
-
-// 强制使用代理，避免混合内容问题
-const finalBaseURL = baseURL.startsWith('http://') ? '/api' : baseURL;
+// 强制使用代理路径，避免混合内容问题
+// 永远使用 /api 路径，让Vercel代理到后端
+const baseURL = '/api';
+const finalBaseURL = '/api';
 console.log('🎯 Selected baseURL:', baseURL);
 console.log('🔧 Final baseURL:', finalBaseURL);
 
