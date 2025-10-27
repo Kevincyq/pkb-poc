@@ -36,24 +36,39 @@ export const uploadFile = async (
   const formData = new FormData();
   formData.append('file', file);
 
-  // 使用智能上传接口，支持云盘存储和用户隔离
-  const response = await api.post<UploadResponse>('/ingest/upload-smart', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-    onUploadProgress: (progressEvent) => {
-      if (onProgress && progressEvent.total) {
-        const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-        onProgress({
-          loaded: progressEvent.loaded,
-          total: progressEvent.total,
-          progress: progress
-        });
-      }
-    },
-  });
+  console.log('📤 Starting file upload:', file.name, file.size);
+  console.log('🌐 Upload URL: /ingest/upload-smart');
 
-  return response.data;
+  try {
+    // 使用智能上传接口，支持云盘存储和用户隔离
+    const response = await api.post<UploadResponse>('/ingest/upload-smart', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      onUploadProgress: (progressEvent) => {
+        if (onProgress && progressEvent.total) {
+          const progress = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          onProgress({
+            loaded: progressEvent.loaded,
+            total: progressEvent.total,
+            progress: progress
+          });
+        }
+      },
+    });
+
+    console.log('✅ Upload successful:', response.data);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Upload failed:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      config: error.config,
+      response: error.response
+    });
+    throw error;
+  }
 };
 
 export interface BatchUploadResponse {
