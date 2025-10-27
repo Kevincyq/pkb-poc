@@ -32,8 +32,11 @@ api.interceptors.request.use(
   (config) => {
     // 自动添加认证头（如果存在token）
     const token = localStorage.getItem('auth_token');
-    if (token && !config.headers.Authorization) {
+    if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log('🔐 Adding auth header with token:', token.substring(0, 20) + '...');
+    } else {
+      console.log('⚠️ No auth token found in localStorage');
     }
     
     console.log('🌐 Making request to:', config.url);

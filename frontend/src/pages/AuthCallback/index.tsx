@@ -36,6 +36,7 @@ const AuthCallback: React.FC = () => {
       
       if (token && success === 'true') {
         // 后端已经处理了OAuth，直接保存token
+        console.log('✅ Saving token to localStorage:', token.substring(0, 20) + '...');
         localStorage.setItem('auth_token', token);
         localStorage.setItem('cloud_connected', 'true');
         
@@ -43,12 +44,20 @@ const AuthCallback: React.FC = () => {
         try {
           const userInfo = await AuthService.getCurrentUser();
           localStorage.setItem('auth_user', JSON.stringify(userInfo));
+          console.log('✅ User info saved:', userInfo);
           
           // 更新Context状态
           setCloudConnected(true);
           
-          // 立即跳转到主页面，不需要等待
-          window.location.href = '/';
+          // 确保localStorage已写入
+          console.log('✅ Checking localStorage after save:');
+          console.log('  - auth_token:', localStorage.getItem('auth_token')?.substring(0, 20));
+          console.log('  - auth_user:', localStorage.getItem('auth_user')?.substring(0, 50));
+          
+          // 使用 navigate 而不是 window.location.href，避免页面重新加载丢失状态
+          setTimeout(() => {
+            navigate('/', { replace: true });
+          }, 100);
         } catch (e) {
           console.error('Failed to get user info:', e);
           setStatus('error');
