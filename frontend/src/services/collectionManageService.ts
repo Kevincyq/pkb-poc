@@ -23,8 +23,10 @@ export interface UpdateCollectionRequest {
 // 获取所有自建合集
 export const getCustomCollections = async (): Promise<CustomCollection[]> => {
   try {
-    console.log('🔍 Fetching custom collections from /collection');
-    const response = await api.get<CustomCollection[]>('/collection');
+    // 确保URL没有尾随斜杠
+    const url = '/collection'.replace(/\/$/, '');
+    console.log('🔍 Fetching custom collections from:', url);
+    const response = await api.get<CustomCollection[]>(url);
     console.log('✅ Custom collections response:', response.status, response.data?.length || 0);
     return response.data;
   } catch (error) {

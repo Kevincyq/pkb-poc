@@ -157,11 +157,13 @@ class Collection(Base):
     category_id = Column(UUID(as_uuid=True), ForeignKey("categories.id"), nullable=True)
     auto_generated = Column(Boolean, default=True)  # 是否自动生成
     query_rules = Column(JSON, nullable=True)       # 自动合集的查询规则
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=True)  # ✅ 用户隔离
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # 关系
     category = relationship("Category", back_populates="collections")
+    user = relationship("User", back_populates="collections")  # ✅ 添加用户关系
 
 class Tag(Base):
     """标签表"""
@@ -237,6 +239,7 @@ class User(Base):
     contents = relationship("Content", back_populates="user")
     cloud_auths = relationship("CloudAuth", back_populates="user")
     storage_configs = relationship("StorageConfig", back_populates="user")
+    collections = relationship("Collection", back_populates="user", cascade="all, delete-orphan")  # ✅ 添加关系
 
 class CloudAuth(Base):
     """云盘认证表"""

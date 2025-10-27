@@ -708,7 +708,7 @@ class SearchService:
             }
     
     def get_category_stats(self) -> Dict:
-        """获取分类统计信息用于搜索 - 只返回系统预置的智能分类"""
+        """获取分类统计信息用于搜索 - 只返回系统预置的智能分类（用户隔离）"""
         try:
             # 使用高效的SQL聚合查询获取分类统计
             from sqlalchemy import func
@@ -721,7 +721,7 @@ class SearchService:
             category_stats = []
             for category in all_system_categories:
                 # 统计该分类下有Chunk的Content数量（与搜索逻辑一致）
-                content_count = self.db.query(func.count(func.distinct(Content.id))).select_from(
+                query = self.db.query(func.count(func.distinct(Content.id))).select_from(
                     ContentCategory
                 ).join(
                     Content, ContentCategory.content_id == Content.id
@@ -729,7 +729,13 @@ class SearchService:
                     Chunk, Content.id == Chunk.content_id
                 ).filter(
                     ContentCategory.category_id == category.id
-                ).scalar() or 0
+                )
+                
+                # 用户隔离：只统计当前用户的内容
+                if self.user_id:
+                    query = query.filter(Content.user_id == self.user_id)
+                
+                content_count = query.scalar() or 0
                 
                 category_stats.append({
                     'id': category.id,

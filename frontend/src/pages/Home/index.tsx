@@ -30,7 +30,7 @@ type CustomCollection = collectionService.CustomCollection;
 export default function Home() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { user, logout, cloudConnected } = useAuth();
+  const { user, logout, cloudConnected, isAuthenticated, isLoading: authLoading } = useAuth();
   const [categories, setCategories] = useState<Category[]>([]);
   const [customCollections, setCustomCollections] = useState<CustomCollection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -81,9 +81,24 @@ export default function Home() {
     confidence: [0, 1] as [number, number]
   });
 
+  // 等待认证完成后再加载数据
   useEffect(() => {
+    // 如果还在认证检查中，等待
+    if (authLoading) {
+      console.log('⏳ Waiting for auth to complete...');
+      return;
+    }
+    
+    // 如果未认证，不要加载数据（AuthGuard会重定向到登录页）
+    if (!isAuthenticated) {
+      console.log('⚠️ User not authenticated, skipping data load');
+      return;
+    }
+    
+    // 认证完成且用户已登录，加载数据
+    console.log('✅ User authenticated, loading data...');
     loadData();
-  }, []);
+  }, [authLoading, isAuthenticated]);
 
   // 处理点击外部关闭菜单
   useEffect(() => {

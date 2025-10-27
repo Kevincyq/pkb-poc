@@ -78,7 +78,7 @@ def get_collections(
                 ))
                 continue
             
-            # 计算合集中的文档数量，只统计有chunks的内容
+            # 计算合集中的文档数量，只统计有chunks的内容（用户隔离）
             content_count = db.query(func.count(func.distinct(Content.id))).select_from(
                 ContentCategory
             ).join(
@@ -86,7 +86,8 @@ def get_collections(
             ).join(
                 Chunk, Content.id == Chunk.content_id
             ).filter(
-                ContentCategory.category_id == collection.category_id
+                ContentCategory.category_id == collection.category_id,
+                Content.user_id == current_user.id  # ✅ 用户隔离
             ).scalar() or 0
             
             result.append(CollectionResponse(
@@ -115,15 +116,20 @@ def get_collections(
         raise HTTPException(status_code=500, detail=f"获取合集列表失败: {str(e)}")
 
 @router.post("/", response_model=CollectionResponse)
-def create_collection(collection_data: CollectionCreate, db: Session = Depends(get_db)):
+def create_collection(
+    collection_data: CollectionCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
-    创建新的自建合集，支持智能匹配
+    创建新的自建合集，支持智能匹配（用户隔离）
     """
     try:
-        # 检查名称是否已存在
+        # 检查名称是否已存在（用户隔离）
         existing = db.query(Collection).filter(
             Collection.name == collection_data.name,
-            Collection.auto_generated == False
+            Collection.auto_generated == False,
+            Collection.user_id == current_user.id  # ✅ 用户隔离
         ).first()
         
         if existing:
@@ -170,13 +176,14 @@ def create_collection(collection_data: CollectionCreate, db: Session = Depends(g
                 collection_data.description
             )
         
-        # 创建合集
+        # 创建合集（用户隔离）
         collection = Collection(
             name=collection_data.name,
             description=collection_data.description,
             category_id=category.id,
             auto_generated=False,  # 标记为自建合集
-            query_rules=query_rules  # 保存匹配规则
+            query_rules=query_rules,  # 保存匹配规则
+            user_id=current_user.id  # ✅ 用户隔离
         )
         
         db.add(collection)
@@ -254,12 +261,13 @@ def fix_missing_rules(db: Session = Depends(get_db)):
 
 @router.put("/{collection_id}", response_model=CollectionResponse)
 def update_collection(
-    collection_id: str, 
-    collection_data: CollectionUpdate, 
+    collection_id: str,
+    collection_data: CollectionUpdate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    更新合集信息（重命名等）
+    更新合集信息（重命名等，用户隔离）
     """
     try:
         # 转换UUID
@@ -269,19 +277,21 @@ def update_collection(
         except ValueError:
             raise HTTPException(status_code=400, detail="无效的合集ID格式")
         
-        # 查找合集
+        # 查找合集（用户隔离）
         collection = db.query(Collection).filter(
             Collection.id == uuid_id,
-            Collection.auto_generated == False  # 只能更新自建合集
+            Collection.auto_generated == False,  # 只能更新自建合集
+            Collection.user_id == current_user.id  # ✅ 用户隔离
         ).first()
         
         if not collection:
             raise HTTPException(status_code=404, detail="合集不存在或不是自建合集")
         
-        # 如果要更新名称，检查是否重名
+        # 如果要更新名称，检查是否重名（用户隔离）
         if collection_data.name and collection_data.name != collection.name:
             existing = db.query(Collection).filter(
                 Collection.name == collection_data.name,
+                Collection.user_id == current_user.id,  # ✅ 用户隔离
                 Collection.auto_generated == False,
                 Collection.id != uuid_id
             ).first()
@@ -328,9 +338,13 @@ def update_collection(
         raise HTTPException(status_code=500, detail=f"更新合集失败: {str(e)}")
 
 @router.delete("/{collection_id}")
-def delete_collection(collection_id: str, db: Session = Depends(get_db)):
+def delete_collection(
+    collection_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
-    删除自建合集
+    删除自建合集（用户隔离）
     """
     try:
         logger.info(f"Attempting to delete collection: {collection_id}")
@@ -344,10 +358,11 @@ def delete_collection(collection_id: str, db: Session = Depends(get_db)):
             logger.error(f"Invalid UUID format: {collection_id}")
             raise HTTPException(status_code=400, detail="无效的合集ID格式")
         
-        # 查找合集
+        # 查找合集（用户隔离）
         collection = db.query(Collection).filter(
             Collection.id == uuid_id,
-            Collection.auto_generated == False  # 只能删除自建合集
+            Collection.auto_generated == False,  # 只能删除自建合集
+            Collection.user_id == current_user.id  # ✅ 用户隔离
         ).first()
         
         if not collection:
@@ -386,9 +401,13 @@ def delete_collection(collection_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"删除合集失败: {str(e)}")
 
 @router.get("/{collection_id}/contents")
-def get_collection_contents(collection_id: str, db: Session = Depends(get_db)):
+def get_collection_contents(
+    collection_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
-    获取合集中的文档列表
+    获取合集中的文档列表（用户隔离）
     """
     try:
         # 转换UUID
@@ -398,17 +417,21 @@ def get_collection_contents(collection_id: str, db: Session = Depends(get_db)):
         except ValueError:
             raise HTTPException(status_code=400, detail="无效的合集ID格式")
         
-        # 查找合集
-        collection = db.query(Collection).filter(Collection.id == uuid_id).first()
+        # 查找合集（用户隔离）
+        collection = db.query(Collection).filter(
+            Collection.id == uuid_id,
+            Collection.user_id == current_user.id  # ✅ 用户隔离
+        ).first()
         if not collection:
             raise HTTPException(status_code=404, detail="合集不存在")
         
         if not collection.category_id:
             return {"collection": collection.name, "contents": []}
         
-        # 查询合集中的文档
+        # 查询合集中的文档（用户隔离）
         contents = db.query(Content).join(ContentCategory).filter(
-            ContentCategory.category_id == collection.category_id
+            ContentCategory.category_id == collection.category_id,
+            Content.user_id == current_user.id  # ✅ 用户隔离
         ).all()
         
         result = []

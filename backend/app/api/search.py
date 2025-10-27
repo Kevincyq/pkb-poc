@@ -174,11 +174,14 @@ async def search_by_category(
         }
 
 @router.get("/categories/stats")
-async def get_category_search_stats(db: Session = Depends(get_db)):
+async def get_category_search_stats(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
-    获取分类统计信息用于搜索筛选
+    获取分类统计信息用于搜索筛选（用户隔离）
     """
-    search_service = SearchService(db)
+    search_service = SearchService(db, user_id=str(current_user.id))
     stats = search_service.get_category_stats()
     
     return stats
