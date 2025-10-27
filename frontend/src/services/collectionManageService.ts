@@ -23,7 +23,7 @@ export interface UpdateCollectionRequest {
 // 获取所有自建合集
 export const getCustomCollections = async (): Promise<CustomCollection[]> => {
   try {
-    const response = await api.get<CustomCollection[]>('/collection/');
+    const response = await api.get<CustomCollection[]>('/collection');
     return response.data;
   } catch (error) {
     console.error('Failed to fetch custom collections:', error);
@@ -34,7 +34,7 @@ export const getCustomCollections = async (): Promise<CustomCollection[]> => {
 // 创建新合集
 export const createCollection = async (data: CreateCollectionRequest): Promise<CustomCollection> => {
   try {
-    const response = await api.post<CustomCollection>('/collection/', data);
+    const response = await api.post<CustomCollection>('/collection', data);
     return response.data;
   } catch (error) {
     console.error('Failed to create collection:', error);
@@ -71,7 +71,7 @@ export const deleteCollection = async (id: string): Promise<void> => {
     console.log('Making DELETE request to:', `/collection/${id}`);
     
     // 首先检查API是否存在
-    const testResponse = await api.get('/collection/');
+    const testResponse = await api.get('/collection');
     console.log('Collection API exists, status:', testResponse.status);
     
     const response = await api.delete(`/collection/${id}`);

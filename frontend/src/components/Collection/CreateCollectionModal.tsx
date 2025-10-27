@@ -27,7 +27,7 @@ export default function CreateCollectionModal({
     try {
       console.log('🚀 Creating collection with data:', values);
       
-      const response = await api.post('/collection/', values);
+      const response = await api.post('/collection', values);
       console.log('✅ Collection created successfully:', response.data);
       
       message.success(`合集 "${values.name}" 创建成功！${values.auto_match ? '已自动匹配相关文档。' : ''}`);
