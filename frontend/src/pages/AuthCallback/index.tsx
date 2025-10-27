@@ -27,7 +27,7 @@ const AuthCallback: React.FC = () => {
       const success = searchParams.get('success');
       const errorParam = searchParams.get('error');
       
-      // 检查是否有错误
+      // 检查是否有错误errors
       if (success === 'false' || errorParam) {
         setStatus('error');
         setError(errorParam || 'OAuth授权失败');
@@ -40,7 +40,7 @@ const AuthCallback: React.FC = () => {
         localStorage.setItem('auth_token', token);
         localStorage.setItem('cloud_connected', 'true');
         
-        // 获取用户信息
+        // 获取用户信息user info
         try {
           const userInfo = await AuthService.getCurrentUser();
           localStorage.setItem('auth_user', JSON.stringify(userInfo));
