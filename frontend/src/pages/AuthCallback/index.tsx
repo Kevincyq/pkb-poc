@@ -38,63 +38,30 @@ const AuthCallback: React.FC = () => {
         // 后端已经处理了OAuth，直接保存token
         localStorage.setItem('auth_token', token);
         localStorage.setItem('cloud_connected', 'true');
-        setCloudConnected(true);
         
         // 获取用户信息
         try {
           const userInfo = await AuthService.getCurrentUser();
           localStorage.setItem('auth_user', JSON.stringify(userInfo));
+          
+          // 更新Context状态
+          setCloudConnected(true);
+          
+          // 立即跳转到主页面，不需要等待
+          window.location.href = '/';
         } catch (e) {
           console.error('Failed to get user info:', e);
+          setStatus('error');
+          setError('获取用户信息失败');
+          return;
         }
-        
-        setStatus('success');
-        setMessage('Google OAuth授权成功！');
-        
-        // 延迟跳转到主页面
-        setTimeout(() => {
-          navigate('/');
-        }, 2000);
         return;
       }
       
-      // 旧的流程：从URL参数获取code和state（用于直接OAuth回调）
-      const code = searchParams.get('code');
-      const state = searchParams.get('state');
-
-      // 检查必要参数
-      if (!code || !state) {
-        setStatus('error');
-        setError('缺少必要的OAuth参数');
-        return;
-      }
-
-      setStatus('loading');
-      setMessage('正在处理Google OAuth回调...');
-
-      // 调用后端处理OAuth回调
-      const result = await AuthService.handleGoogleCallback(code, state);
-
-      if (result.success) {
-        // 保存用户信息和Token到localStorage
-        localStorage.setItem('auth_token', result.token);
-        localStorage.setItem('auth_user', JSON.stringify(result.user));
-        localStorage.setItem('cloud_connected', result.drive_access_confirmed.toString());
-
-        // 设置云盘连接状态
-        setCloudConnected(result.drive_access_confirmed);
-
-        setStatus('success');
-        setMessage('Google OAuth授权成功！');
-
-        // 延迟跳转到主页面
-        setTimeout(() => {
-          navigate('/');
-        }, 2000);
-      } else {
-        setStatus('error');
-        setError(result.error || 'OAuth授权失败');
-      }
+      // 如果没有token，说明这不是后端重定向的回调
+      // 这种情况不应该发生，因为Google OAuth总是回调到后端
+      setStatus('error');
+      setError('未识别的回调格式，请联系管理员');
     } catch (error: any) {
       console.error('OAuth callback error:', error);
       setStatus('error');

@@ -305,6 +305,8 @@ export default function Home() {
     logout();
     message.success('已退出登录');
     navigate('/login');
+    // 清除所有查询缓存
+    queryClient.clear();
   };
 
   const handleCollectionClick = (_categoryId: string, categoryName: string) => {
