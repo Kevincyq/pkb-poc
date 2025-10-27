@@ -44,6 +44,8 @@ class CollectionResponse(BaseModel):
     created_at: str
     updated_at: str
 
+# ✅ 同时支持 / 和 "" 以避免FastAPI的自动重定向
+@router.get("", response_model=List[CollectionResponse])
 @router.get("/", response_model=List[CollectionResponse])
 def get_collections(
     current_user: User = Depends(get_current_user),

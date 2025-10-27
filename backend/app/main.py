@@ -78,6 +78,13 @@ class ProxyHeadersMiddleware(BaseHTTPMiddleware):
         # 处理X-Forwarded-Ssl头
         if "x-forwarded-ssl" in request.headers and request.headers["x-forwarded-ssl"] == "on":
             request.scope["scheme"] = "https"
+        
+        # ✅ 移除API路径的尾随斜杠
+        path = request.url.path
+        if path.endswith('/') and len(path) > 1 and '/api/' in path:
+            # 对于API路径，移除尾随斜杠
+            request.scope['path'] = path.rstrip('/')
+            logger.debug(f"Removed trailing slash from path: {path} -> {request.scope['path']}")
             
         response = await call_next(request)
         return response
@@ -90,7 +97,7 @@ app = FastAPI(
         redoc_url=None
         )
 
-# 添加代理头处理中间件（必须在CORS之前）
+# 加上代理头处理中间件（必须在CORS之前）
 app.add_middleware(ProxyHeadersMiddleware)
 
 app.add_middleware(
