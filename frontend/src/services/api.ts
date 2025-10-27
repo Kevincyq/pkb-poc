@@ -61,18 +61,32 @@ api.interceptors.response.use(
     if (error.response) {
       console.error('API Error Response:', error.response.data);
       console.error('API Error Status:', error.response.status);
+      console.error('API Error URL:', error.config?.url);
       console.error('API Error Headers:', error.response.headers);
       
-      // 处理401未授权错误 - 清除无效token
+      // 处理401未授权错误 - 但只在确实是认证失败时才重定向
       if (error.response.status === 401) {
-        console.log('🔐 401 Unauthorized - clearing invalid token');
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('auth_user');
-        localStorage.removeItem('cloud_connected');
+        const errorDetail = error.response.data?.detail;
+        console.log('🔐 401 Unauthorized - error detail:', errorDetail);
         
-        // 如果不在登录页面，重定向到登录页
-        if (window.location.pathname !== '/login') {
-          window.location.href = '/login';
+        // 检查是否是URL路径问题（如尾随斜杠）
+        const errorUrl = error.config?.url || '';
+        if (errorUrl.includes('collection/') || errorDetail?.includes('authorization header')) {
+          console.log('⚠️ 401 with collection API or missing authorization');
+          console.log('  - This might be a temporary auth issue, not clearing token');
+          console.log('  - Waiting for other requests to complete');
+          // 不立即清除token，等所有请求完成后再判断
+        } else {
+          console.log('🔐 401 Unauthorized - clearing invalid token');
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('auth_user');
+          localStorage.removeItem('cloud_connected');
+          
+          // 如果不在登录页面，重定向到登录页
+          if (window.location.pathname !== '/login' && window.location.pathname !== '/auth/callback') {
+            console.log('🔄 Redirecting to login page');
+            window.location.href = '/login';
+          }
         }
       }
       

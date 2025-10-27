@@ -23,10 +23,12 @@ export interface UpdateCollectionRequest {
 // 获取所有自建合集
 export const getCustomCollections = async (): Promise<CustomCollection[]> => {
   try {
+    console.log('🔍 Fetching custom collections from /collection');
     const response = await api.get<CustomCollection[]>('/collection');
+    console.log('✅ Custom collections response:', response.status, response.data?.length || 0);
     return response.data;
   } catch (error) {
-    console.error('Failed to fetch custom collections:', error);
+    console.error('❌ Failed to fetch custom collections:', error);
     throw error;
   }
 };
