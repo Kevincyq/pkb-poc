@@ -616,8 +616,11 @@ def download_and_parse_cloud_file(content_id: str):
             
             try:
                 # 解析文件内容
+                logger.info(f"📄 Parsing file: {temp_file.name}, title: {content.title}")
                 processor = DocumentProcessor()
                 parse_result = processor.process_file(temp_file.name, content.title)
+                
+                logger.info(f"📋 Parse result: success={parse_result.get('success')}, text_length={len(parse_result.get('text', ''))}, metadata={parse_result.get('metadata')}")
                 
                 if parse_result.get('success', True) and parse_result.get('text'):
                     # 更新内容
@@ -680,7 +683,10 @@ def download_and_parse_cloud_file(content_id: str):
                     logger.info(f"Successfully processed cloud file: {content.title}")
                     return {"success": True, "chunks_count": len(chunks)}
                 else:
-                    raise Exception(f"Failed to parse file: {parse_result.get('error', 'Unknown error')}")
+                    error_msg = parse_result.get('metadata', {}).get('error', 'Unknown error')
+                    logger.error(f"❌ Parse failed for {content.title}: {error_msg}")
+                    logger.error(f"📋 Parse result details: {parse_result}")
+                    raise Exception(f"Failed to parse file: {error_msg}")
                     
             finally:
                 # 清理临时文件
