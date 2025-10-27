@@ -541,9 +541,11 @@ class CategoryService:
         
         return results
     
-    def get_categories(self, include_stats: bool = False) -> List[Dict[str, Any]]:
-        """获取所有分类"""
+    def get_categories(self, include_stats: bool = False, user_id = None) -> List[Dict[str, Any]]:
+        """获取所有分类（支持用户隔离）"""
         try:
+            from app.models import Content
+            
             categories = self.db.query(Category).all()
             
             result = []
@@ -558,10 +560,15 @@ class CategoryService:
                 }
                 
                 if include_stats:
-                    # 统计该分类下的文档数量
-                    content_count = self.db.query(func.count(ContentCategory.content_id)).filter(
-                        ContentCategory.category_id == category.id
-                    ).scalar()
+                    # 统计该分类下的文档数量（用户隔离）
+                    query = self.db.query(func.count(ContentCategory.content_id)).join(
+                        Content, ContentCategory.content_id == Content.id
+                    ).filter(ContentCategory.category_id == category.id)
+                    
+                    if user_id is not None:
+                        query = query.filter(Content.user_id == user_id)
+                    
+                    content_count = query.scalar()
                     category_dict["content_count"] = content_count
                 
                 result.append(category_dict)

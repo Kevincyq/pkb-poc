@@ -36,7 +36,8 @@ export const uploadFile = async (
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await api.post<UploadResponse>('/ingest/upload', formData, {
+  // 使用智能上传接口，支持云盘存储和用户隔离
+  const response = await api.post<UploadResponse>('/ingest/upload-smart', formData, {
     headers: {
       'Content-Type': 'multipart/form-data',
     },

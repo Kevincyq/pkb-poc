@@ -12,8 +12,9 @@ from typing import Optional, List
 import logging
 
 from app.db import SessionLocal
-from app.models import Collection, Category, Content, ContentCategory, Chunk
+from app.models import Collection, Category, Content, ContentCategory, Chunk, User
 from app.services.collection_matching_service import CollectionMatchingService
+from app.api.auth import get_current_user
 from app.utils.datetime_utils import serialize_datetime
 
 router = APIRouter()
@@ -44,14 +45,18 @@ class CollectionResponse(BaseModel):
     updated_at: str
 
 @router.get("/", response_model=List[CollectionResponse])
-def get_collections(db: Session = Depends(get_db)):
+def get_collections(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
-    获取所有自建合集
+    获取所有自建合集（用户隔离）
     """
     try:
-        # 查询所有非自动生成的合集（自建合集）
+        # 查询当前用户创建的非自动生成合集
         collections = db.query(Collection).filter(
-            Collection.auto_generated == False
+            Collection.auto_generated == False,
+            Collection.user_id == current_user.id
         ).all()
         
         result = []

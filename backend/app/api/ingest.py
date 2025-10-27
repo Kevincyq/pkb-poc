@@ -693,13 +693,18 @@ async def upload_file_smart(
                 queue='heavy'
             )
         
+        # 返回与前端期望的格式兼容
         return {
-            "success": True,
+            "status": "success",
             "content_id": str(content_record.id),
-            "storage_strategy": result["strategy"],
+            "title": file.filename,
+            "processing_status": "uploaded",
+            "chunks_created": 0,
             "file_size": file_size,
+            "message": f"文件已{'上传到云盘' if result['strategy'] == 'cloud' else '保存到本地'}",
+            # 额外信息
+            "storage_strategy": result["strategy"],
             "provider": result.get("provider"),
-            "message": f"文件已{'上传到云盘' if result['strategy'] == 'cloud' else '保存到本地'}"
         }
         
     except Exception as e:

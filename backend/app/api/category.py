@@ -11,6 +11,8 @@ import logging
 
 from app.db import SessionLocal
 from app.services.category_service import CategoryService
+from app.api.auth import get_current_user
+from app.models import User
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -43,13 +45,15 @@ class BatchClassificationRequest(BaseModel):
 @router.get("/")
 def get_categories(
     include_stats: bool = Query(False, description="是否包含统计信息"),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    获取所有分类列表
+    获取所有分类列表（用户隔离）
     
     Args:
         include_stats: 是否包含每个分类的文档统计
+        current_user: 当前用户
         db: 数据库会话
         
     Returns:
@@ -57,7 +61,10 @@ def get_categories(
     """
     try:
         category_service = CategoryService(db)
-        categories = category_service.get_categories(include_stats=include_stats)
+        categories = category_service.get_categories(
+            include_stats=include_stats, 
+            user_id=current_user.id
+        )
         
         return {
             "categories": categories,

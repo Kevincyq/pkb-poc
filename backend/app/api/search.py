@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Query, Depends
 from app.db import SessionLocal
-from app.models import Content, Chunk
+from app.models import Content, Chunk, User
 from app.services.search_service import SearchService
+from app.api.auth import get_current_user
 from sqlalchemy.orm import Session
 from typing import Optional
 import re
@@ -41,6 +42,7 @@ async def search(
     source: Optional[str] = Query(None, description="分类来源过滤"),
     confidence_min: Optional[float] = Query(None, description="最小置信度"),
     confidence_max: Optional[float] = Query(None, description="最大置信度"),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -88,9 +90,9 @@ async def search(
 
         logger.info(f"Decoded query: {decoded_query}")
         
-        # 使用搜索服务
-        search_service = SearchService(db)
-        logger.info("SearchService created successfully")
+        # 使用搜索服务（用户隔离）
+        search_service = SearchService(db, user_id=str(current_user.id))
+        logger.info(f"SearchService created for user: {current_user.id}")
         
         results = search_service.search(decoded_query, top_k, search_type, filters)
         logger.info(f"Search completed, results count: {len(results.get('results', []))}")

@@ -16,8 +16,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 class SearchService:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, user_id: Optional[str] = None):
         self.db = db
+        self.user_id = user_id
         self.embedding_service = EmbeddingService()
     
     def search(
@@ -102,6 +103,10 @@ class SearchService:
             ).outerjoin(
                 Category, ContentCategory.category_id == Category.id
             )
+            
+            # 用户隔离：只搜索当前用户的内容
+            if self.user_id:
+                base_query = base_query.filter(Content.user_id == self.user_id)
             
             # 应用过滤条件
             if filters:
@@ -236,6 +241,11 @@ class SearchService:
             # 添加过滤条件
             where_conditions = []
             params = {}
+            
+            # 用户隔离：只搜索当前用户的内容
+            if self.user_id:
+                where_conditions.append("contents.user_id::text = %(user_id)s")
+                params['user_id'] = str(self.user_id)
             
             if filters:
                 if filters.get('modality'):
