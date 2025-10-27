@@ -853,9 +853,13 @@ export default function Home() {
                   key: 'logout',
                   label: '退出登录',
                   icon: <LogoutOutlined />,
-                  onClick: handleLogout,
                 },
               ],
+              onClick: ({ key }) => {
+                if (key === 'logout') {
+                  handleLogout();
+                }
+              },
             }}
             placement="bottomRight"
             trigger={['click']}
