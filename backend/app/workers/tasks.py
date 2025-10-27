@@ -39,25 +39,30 @@ def simple_chunk(text: str, max_len: int = 700):
     
     return [c.strip() for c in chunks if c.strip()]
 
-# 新增：文件解析和分块任务
+# 新增：文件解析和分块任务 - 重构版本，支持用户上下文
 @celery_app.task(name="app.workers.tasks.parse_and_chunk_file", queue="quick")
-def parse_and_chunk_file(content_id: str, file_path: str):
+def parse_and_chunk_file(content_id: str, file_path: str, user_id: str = None):
     """
-    异步解析文件内容并进行分块
+    异步解析文件内容并进行分块 - 支持用户上下文
     
     Args:
         content_id: 内容ID
         file_path: 文件路径
+        user_id: 用户ID（用于用户隔离）
     """
     db = SessionLocal()
     try:
-        logger.info(f"🔍 Starting file parsing for content {content_id}: {file_path}")
+        logger.info(f"🔍 Starting file parsing for content {content_id}: {file_path} (user: {user_id})")
         
-        # 获取内容记录
-        content = db.query(Content).filter(Content.id == content_id).first()
+        # 创建用户上下文服务
+        from app.services.user_context_service import UserContextService
+        context = UserContextService(db, user_id)
+        
+        # 获取内容记录（带用户隔离）
+        content = context.get_user_content(content_id)
         if not content:
-            logger.error(f"Content {content_id} not found")
-            return {"status": "error", "message": "Content not found"}
+            logger.error(f"Content {content_id} not found or access denied for user {user_id}")
+            return {"status": "error", "message": "Content not found or access denied"}
         
         # 更新状态为解析中
         if content.meta:
@@ -357,29 +362,39 @@ def process_document(content_id: str, doc_type: str = "text"):
     return {"ok": True, "content_id": content_id, "processed": True}
 
 @celery_app.task(name="app.workers.tasks.classify_content", queue="classify")
-def classify_content(content_id: str):
+def classify_content(content_id: str, user_id: str = None):
     """
-    对内容进行智能分类
+    对内容进行智能分类 - 支持用户上下文
     
     Args:
         content_id: 内容ID
+        user_id: 用户ID（用于用户隔离）
         
     Returns:
         分类结果
     """
     db = SessionLocal()
     try:
-        logger.info(f"Starting classification for content: {content_id}")
+        logger.info(f"Starting classification for content: {content_id} (user: {user_id})")
+        
+        # 创建用户上下文服务
+        from app.services.user_context_service import UserContextService
+        context = UserContextService(db, user_id)
+        
+        # 获取内容记录（带用户隔离）
+        content = context.get_user_content(content_id)
+        if not content:
+            logger.error(f"Content {content_id} not found or access denied for user {user_id}")
+            return {"success": False, "error": "Content not found or access denied"}
         
         # 🔥 修复：检查解析状态，如果还在解析中则延迟执行
-        content = db.query(Content).filter(Content.id == content_id).first()
-        if content and content.meta:
+        if content.meta:
             parsing_status = content.meta.get("parsing_status", "pending")
             if parsing_status == "parsing":
                 logger.warning(f"⏰ Content {content_id} still parsing, retrying in 3 seconds")
-                # 延迟重试
+                # 延迟重试（传递用户ID）
                 classify_content.apply_async(
-                    args=[content_id],
+                    args=[content_id, user_id],
                     queue="classify",
                     priority=8,
                     countdown=3
@@ -393,8 +408,8 @@ def classify_content(content_id: str):
             flag_modified(content, 'meta')
         db.commit()
         
-        # 初始化分类服务
-        category_service = CategoryService(db)
+        # 初始化分类服务（传递用户ID）
+        category_service = CategoryService(db, user_id)
         
         # 确保系统分类已初始化
         category_service.initialize_system_categories()

@@ -11,30 +11,39 @@ import logging
 logger = logging.getLogger(__name__)
 
 @celery_app.task(name="app.workers.quick_tasks.quick_classify_content", queue="quick", priority=9)
-def quick_classify_content(content_id: str):
+def quick_classify_content(content_id: str, user_id: str = None):
     """
-    快速分类内容 - 高优先级任务（后台执行，不更新前端显示）
+    快速分类内容 - 高优先级任务，支持用户上下文
     
     Args:
         content_id: 内容ID
+        user_id: 用户ID（用于用户隔离）
         
     Returns:
         快速分类结果
     """
     db = SessionLocal()
     try:
-        logger.info(f"Starting quick classification for content: {content_id}")
+        logger.info(f"Starting quick classification for content: {content_id} (user: {user_id})")
+        
+        # 创建用户上下文服务
+        from app.services.user_context_service import UserContextService
+        context = UserContextService(db, user_id)
+        
+        # 获取内容记录（带用户隔离）
+        content = context.get_user_content(content_id)
+        if not content:
+            logger.error(f"Content {content_id} not found or access denied for user {user_id}")
+            return {"success": False, "error": "Content not found or access denied"}
         
         # 🔥 修复：检查解析状态，如果还在解析中则延迟执行
-        from app.models import Content
-        content = db.query(Content).filter(Content.id == content_id).first()
-        if content and content.meta:
+        if content.meta:
             parsing_status = content.meta.get("parsing_status", "pending")
             if parsing_status == "parsing":
                 logger.warning(f"⏰ Content {content_id} still parsing, retrying in 2 seconds")
-                # 延迟重试
+                # 延迟重试（传递用户ID）
                 quick_classify_content.apply_async(
-                    args=[content_id],
+                    args=[content_id, user_id],
                     queue="quick",
                     priority=9,
                     countdown=2
@@ -107,38 +116,47 @@ def batch_quick_classify(content_ids: list):
         db.close()
 
 @celery_app.task(name="app.workers.quick_tasks.match_document_to_collections", queue="quick", priority=8)
-def match_document_to_collections(content_id: str):
+def match_document_to_collections(content_id: str, user_id: str = None):
     """
-    将文档匹配到合适的用户合集
+    将文档匹配到合适的用户合集 - 支持用户上下文
     
     Args:
         content_id: 内容ID
+        user_id: 用户ID（用于用户隔离）
         
     Returns:
         匹配结果
     """
     db = SessionLocal()
     try:
-        logger.info(f"Starting collection matching for content: {content_id}")
+        logger.info(f"Starting collection matching for content: {content_id} (user: {user_id})")
+        
+        # 创建用户上下文服务
+        from app.services.user_context_service import UserContextService
+        context = UserContextService(db, user_id)
+        
+        # 获取内容记录（带用户隔离）
+        content = context.get_user_content(content_id)
+        if not content:
+            logger.error(f"Content {content_id} not found or access denied for user {user_id}")
+            return {"success": False, "error": "Content not found or access denied"}
         
         # 🔥 修复：检查分类是否完成，如果还在分类中则延迟执行
-        from app.models import Content
-        content = db.query(Content).filter(Content.id == content_id).first()
-        if content and content.meta:
+        if content.meta:
             classification_status = content.meta.get("classification_status", "pending")
             if classification_status in ["pending", "quick_processing", "ai_processing"]:
                 logger.warning(f"⏰ Content {content_id} still classifying (status: {classification_status}), retrying in 3 seconds")
-                # 延迟重试
+                # 延迟重试（传递用户ID）
                 match_document_to_collections.apply_async(
-                    args=[content_id],
+                    args=[content_id, user_id],
                     queue="quick",
                     priority=7,
                     countdown=3
                 )
                 return {"success": False, "error": "Still classifying, retrying"}
         
-        # 初始化合集匹配服务
-        matching_service = CollectionMatchingService(db)
+        # 初始化合集匹配服务（传递用户ID）
+        matching_service = CollectionMatchingService(db, user_id)
         
         # 执行匹配
         matched_collections = matching_service.match_document_to_collections(content_id)

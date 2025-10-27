@@ -282,88 +282,82 @@ class IngestRequest(BaseModel):
     path: str
 
 @router.post("/upload")
-async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    """单文件上传接口"""
-    # MVP限制：验证单个文件大小
-    max_single_size = 20 * 1024 * 1024  # 20MB
-    if file.size and file.size > max_single_size:
-        raise HTTPException(
-            status_code=400,
-            detail=f"MVP阶段单个文件不能超过20MB，当前文件 {file.filename} 大小为 {file.size / 1024 / 1024:.1f}MB"
-        )
-    
-    return await _process_single_file(file, db)
-
-@router.post("/upload-multiple")
-async def upload_multiple_files(files: List[UploadFile] = File(...), db: Session = Depends(get_db)):
+async def upload_file(
+    file: UploadFile = File(...), 
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
-    多文件批量上传接口
+    单文件上传接口 - 重构版本，支持用户隔离
     """
     try:
-        results = []
+        log.info(f"📄 Starting single file upload for user {current_user.email}: {file.filename}")
         
-        # MVP限制：验证文件数量限制
-        if len(files) > 5:  # MVP阶段限制最多5个文件
-            raise HTTPException(
-                status_code=400,
-                detail="MVP阶段一次最多只能上传5个文件"
-            )
+        # 创建用户上下文服务
+        from app.services.user_context_service import UserContextFactory
+        from app.services.file_upload_service import FileUploadServiceFactory
         
-        # MVP限制：验证单个文件大小
-        max_single_size = 20 * 1024 * 1024  # 20MB
-        oversized_files = [f for f in files if f.size and f.size > max_single_size]
-        if oversized_files:
-            oversized_names = [f"{f.filename}({f.size / 1024 / 1024:.1f}MB)" for f in oversized_files]
-            raise HTTPException(
-                status_code=400,
-                detail=f"MVP阶段单个文件不能超过20MB，以下文件超限：{', '.join(oversized_names)}"
-            )
+        context = UserContextFactory.create_from_user(db, current_user)
+        upload_service = FileUploadServiceFactory.create_for_user(context)
         
-        # MVP限制：验证总文件大小
-        total_size = sum(file.size for file in files if file.size)
-        max_total_size = 100 * 1024 * 1024  # 100MB (5个文件×20MB)
-        if total_size > max_total_size:
-            raise HTTPException(
-                status_code=400,
-                detail=f"MVP阶段批量上传总大小不能超过100MB，当前：{total_size / 1024 / 1024:.1f}MB"
-            )
+        # 使用服务处理单文件上传
+        result = await upload_service.process_single_file(file)
         
-        # 处理每个文件
-        for i, file in enumerate(files):
-            try:
-                result = await _process_single_file(file, db)
-                results.append({
-                    "index": i,
-                    "filename": file.filename,
-                    "status": "success",
-                    "result": result
-                })
-            except Exception as e:
-                log.error(f"Failed to process file {file.filename}: {e}")
-                results.append({
-                    "index": i,
-                    "filename": file.filename,
-                    "status": "error",
-                    "error": str(e)
-                })
+        # 调度后台任务
+        content_id = result["content_id"]
+        content = context.get_user_content(content_id)
+        if content and content.meta and content.meta.get("file_path"):
+            upload_service.schedule_background_tasks(content_id, content.meta["file_path"])
         
-        # 统计结果
-        success_count = len([r for r in results if r["status"] == "success"])
-        error_count = len([r for r in results if r["status"] == "error"])
+        log.info(f"✅ Single file upload completed for user {current_user.email}: {file.filename}")
         
-        return {
-            "status": "completed",
-            "total_files": len(files),
-            "success_count": success_count,
-            "error_count": error_count,
-            "results": results,
-            "message": f"批量上传完成：{success_count}个成功，{error_count}个失败"
-        }
+        return result
         
     except HTTPException:
         raise
     except Exception as e:
-        log.error(f"Batch upload error: {e}")
+        log.error(f"❌ Single file upload failed for user {current_user.email}: {e}")
+        raise HTTPException(status_code=500, detail=f"文件上传失败: {str(e)}")
+
+@router.post("/upload-multiple")
+async def upload_multiple_files(
+    files: List[UploadFile] = File(...), 
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    批量文件上传接口 - 重构版本，支持用户隔离
+    """
+    try:
+        log.info(f"📦 Starting batch upload for user {current_user.email}: {len(files)} files")
+        
+        # 创建用户上下文服务
+        from app.services.user_context_service import UserContextFactory
+        from app.services.file_upload_service import FileUploadServiceFactory
+        
+        context = UserContextFactory.create_from_user(db, current_user)
+        upload_service = FileUploadServiceFactory.create_for_user(context)
+        
+        # 使用服务处理批量上传
+        result = await upload_service.process_batch_files(files)
+        
+        # 为每个成功的文件调度后台任务
+        for file_result in result["results"]:
+            if file_result["status"] == "success":
+                content_id = file_result["content_id"]
+                # 从数据库获取文件路径
+                content = context.get_user_content(content_id)
+                if content and content.meta and content.meta.get("file_path"):
+                    upload_service.schedule_background_tasks(content_id, content.meta["file_path"])
+        
+        log.info(f"✅ Batch upload completed for user {current_user.email}: {result['success_count']}/{result['total_files']} successful")
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        log.error(f"❌ Batch upload failed for user {current_user.email}: {e}")
         raise HTTPException(status_code=500, detail=f"批量上传失败: {str(e)}")
 
 async def _process_single_file(file: UploadFile, db: Session):
@@ -708,14 +702,19 @@ async def upload_file_smart(
         
         # ✅ 统一使用本地文件路径进行解析（无论是本地还是云盘存储）
         try:
-            from app.workers.tasks import parse_and_chunk_file
-            task_result = parse_and_chunk_file.apply_async(
-                args=[str(content_record.id), str(file_path)],
-                queue='quick'
-            )
-            log.info(f"✅ Scheduled parse_and_chunk_file task for content {content_record.id}: {task_result.id}")
+            # 使用重构后的文件上传服务调度后台任务
+            from app.services.user_context_service import UserContextFactory
+            from app.services.file_upload_service import FileUploadServiceFactory
+            
+            context = UserContextFactory.create_from_user(db, current_user)
+            upload_service = FileUploadServiceFactory.create_for_user(context)
+            
+            # 调度完整的后台任务链
+            upload_service.schedule_background_tasks(str(content_record.id), str(file_path))
+            
+            log.info(f"✅ Scheduled background tasks for content {content_record.id}")
         except Exception as task_error:
-            log.error(f"❌ Failed to schedule async task for content {content_record.id}: {task_error}")
+            log.error(f"❌ Failed to schedule background tasks for content {content_record.id}: {task_error}")
             # 即使任务调度失败，也返回成功（文件已上传）
         
         # 返回与前端期望的格式兼容

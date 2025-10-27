@@ -5,6 +5,8 @@ from fastapi import APIRouter, Depends, Body
 from sqlalchemy.orm import Session
 from app.db import SessionLocal
 from app.services.qa_service import QAService
+from app.api.auth import get_current_user
+from app.models import User
 from typing import Optional
 from pydantic import BaseModel
 import time
@@ -39,13 +41,14 @@ class ReportRequest(BaseModel):
 @router.post("/ask")
 async def ask_question(
     request: QARequest,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     智能问答接口
     基于知识库内容生成回答
     """
-    qa_service = QAService(db)
+    qa_service = QAService(db, str(current_user.id))  # ✅ 传递用户ID
     result = qa_service.ask(
         question=request.question,
         session_id=request.session_id,
@@ -60,12 +63,13 @@ async def ask_question(
 @router.post("/generate-report")
 async def generate_report(
     request: ReportRequest,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     基于合集内容生成工作日报
     """
-    qa_service = QAService(db)
+    qa_service = QAService(db, str(current_user.id))  # ✅ 传递用户ID
     
     try:
         # 获取合集信息
@@ -153,10 +157,11 @@ async def generate_report(
 async def get_qa_history(
     session_id: Optional[str] = None,
     limit: int = 20,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """获取问答历史"""
-    qa_service = QAService(db)
+    qa_service = QAService(db, str(current_user.id))  # ✅ 传递用户ID
     history = qa_service.get_qa_history(session_id, limit)
     
     return {
@@ -193,9 +198,12 @@ async def get_active_sessions(
     }
 
 @router.get("/test")
-async def test_qa_service(db: Session = Depends(get_db)):
+async def test_qa_service(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """测试 QA 服务配置和 Turing API 连接"""
-    qa_service = QAService(db)
+    qa_service = QAService(db, str(current_user.id))  # ✅ 传递用户ID
     
     return {
         "qa_enabled": qa_service.is_enabled(),

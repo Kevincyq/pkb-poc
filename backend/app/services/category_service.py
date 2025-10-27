@@ -24,7 +24,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 class CategoryService:
-    """文档分类服务"""
+    """文档分类服务 - 支持用户隔离"""
     
     # 预置分类配置
     SYSTEM_CATEGORIES = [
@@ -54,8 +54,13 @@ class CategoryService:
         }
     ]
     
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, user_id: str = None):
         self.db = db
+        self.user_id = user_id
+        
+        # 创建用户上下文服务
+        from app.services.user_context_service import UserContextService
+        self.context = UserContextService(db, user_id)
         
         # 检查 OpenAI 库可用性
         if not OPENAI_AVAILABLE:
@@ -132,21 +137,15 @@ class CategoryService:
             分类结果
         """
         try:
-            # 转换content_id为UUID格式
-            from uuid import UUID
-            try:
-                content_uuid = UUID(content_id) if isinstance(content_id, str) else content_id
-            except ValueError:
-                return {"success": False, "error": "Invalid content_id format"}
-            
-            # 获取内容
-            content = self.db.query(Content).filter(Content.id == content_uuid).first()
+            # 获取内容（带用户隔离）
+            content = self.context.get_user_content(content_id)
             if not content:
-                return {"success": False, "error": "Content not found"}
+                logger.error(f"Content {content_id} not found or access denied for user {self.user_id}")
+                return {"success": False, "error": "Content not found or access denied"}
             
             # 检查是否已分类
             existing_classification = self.db.query(ContentCategory).filter(
-                ContentCategory.content_id == content_uuid
+                ContentCategory.content_id == content.id
             ).first()
             
             if existing_classification and not force_reclassify:

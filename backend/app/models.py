@@ -81,6 +81,7 @@ class QAHistory(Base):
     """问答历史"""
     __tablename__ = "qa_history"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)  # ✅ 添加用户隔离
     session_id = Column(String, nullable=True)      # 会话ID
     question = Column(Text, nullable=False)
     answer = Column(Text, nullable=False)
@@ -90,6 +91,9 @@ class QAHistory(Base):
     confidence = Column(Float, nullable=True)       # 置信度
     feedback = Column(String, nullable=True)        # 用户反馈 good|bad
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
+    
+    # 关系
+    user = relationship("User", back_populates="qa_history")
 
 class AgentTask(Base):
     """Agent 任务"""
@@ -240,6 +244,7 @@ class User(Base):
     cloud_auths = relationship("CloudAuth", back_populates="user")
     storage_configs = relationship("StorageConfig", back_populates="user")
     collections = relationship("Collection", back_populates="user", cascade="all, delete-orphan")  # ✅ 添加关系
+    qa_history = relationship("QAHistory", back_populates="user", cascade="all, delete-orphan")  # ✅ 添加QA历史关系
 
 class CloudAuth(Base):
     """云盘认证表"""

@@ -19,6 +19,10 @@ class SearchService:
     def __init__(self, db: Session, user_id: Optional[str] = None):
         self.db = db
         self.user_id = user_id
+        
+        # 创建用户上下文服务
+        from app.services.user_context_service import UserContextService
+        self.context = UserContextService(db, user_id)
         self.embedding_service = EmbeddingService()
     
     def search(

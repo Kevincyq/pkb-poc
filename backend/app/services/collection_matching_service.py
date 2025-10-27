@@ -14,10 +14,15 @@ from app.models import Collection, Content, ContentCategory, Category
 logger = logging.getLogger(__name__)
 
 class CollectionMatchingService:
-    """智能合集匹配服务"""
+    """智能合集匹配服务 - 支持用户隔离"""
     
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, user_id: str = None):
         self.db = db
+        self.user_id = user_id
+        
+        # 创建用户上下文服务
+        from app.services.user_context_service import UserContextService
+        self.context = UserContextService(db, user_id)
     
     def generate_auto_match_rules(self, collection_name: str, description: str = None) -> Dict[str, Any]:
         """

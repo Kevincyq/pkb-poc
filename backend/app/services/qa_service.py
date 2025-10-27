@@ -22,9 +22,10 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 class QAService:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, user_id: Optional[str] = None):
         self.db = db
-        self.search_service = SearchService(db)
+        self.user_id = user_id
+        self.search_service = SearchService(db, user_id)
         
         # 检查 OpenAI 库可用性
         if not OPENAI_AVAILABLE:
@@ -579,6 +580,7 @@ class QAService:
         """保存问答历史"""
         try:
             qa_record = QAHistory(
+                user_id=self.user_id,  # ✅ 添加用户隔离
                 session_id=session_id,
                 question=question,
                 answer=answer,
@@ -615,6 +617,10 @@ class QAService:
         """获取问答历史"""
         try:
             query = self.db.query(QAHistory)
+            
+            # ✅ 添加用户隔离
+            if self.user_id:
+                query = query.filter(QAHistory.user_id == self.user_id)
             
             if session_id:
                 query = query.filter(QAHistory.session_id == session_id)
