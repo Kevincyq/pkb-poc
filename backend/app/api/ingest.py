@@ -678,20 +678,26 @@ async def upload_file_smart(
         db.refresh(content_record)
         
         # 异步处理任务
-        if result["strategy"] == "local":
-            # 本地文件立即触发解析
-            from app.workers.tasks import parse_and_chunk_file
-            parse_and_chunk_file.apply_async(
-                args=[str(content_record.id), result.get("file_path", "")],
-                queue='quick'
-            )
-        else:
-            # 云盘文件需要先下载再解析
-            from app.workers.tasks import download_and_parse_cloud_file
-            download_and_parse_cloud_file.apply_async(
-                args=[str(content_record.id)],
-                queue='heavy'
-            )
+        try:
+            if result["strategy"] == "local":
+                # 本地文件立即触发解析
+                from app.workers.tasks import parse_and_chunk_file
+                task_result = parse_and_chunk_file.apply_async(
+                    args=[str(content_record.id), result.get("file_path", "")],
+                    queue='quick'
+                )
+                log.info(f"✅ Scheduled parse_and_chunk_file task for content {content_record.id}: {task_result.id}")
+            else:
+                # 云盘文件需要先下载再解析
+                from app.workers.tasks import download_and_parse_cloud_file
+                task_result = download_and_parse_cloud_file.apply_async(
+                    args=[str(content_record.id)],
+                    queue='heavy'
+                )
+                log.info(f"✅ Scheduled download_and_parse_cloud_file task for content {content_record.id}: {task_result.id}")
+        except Exception as task_error:
+            log.error(f"❌ Failed to schedule async task for content {content_record.id}: {task_error}")
+            # 即使任务调度失败，也返回成功（文件已上传）
         
         # 返回与前端期望的格式兼容
         return {
