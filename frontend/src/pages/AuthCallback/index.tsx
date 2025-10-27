@@ -35,15 +35,34 @@ const AuthCallback: React.FC = () => {
       }
       
       if (token && success === 'true') {
-        // 后端已经处理了OAuth，直接保存token和基本用户信息
+        // 保存token
         console.log('✅ Saving token to localStorage:', token.substring(0, 20) + '...');
         localStorage.setItem('auth_token', token);
         localStorage.setItem('cloud_connected', 'true');
         
-        // 立即重定向到首页（不需要等待后端API调用）
-        // AuthContext会从后端获取完整的用户信息
-        console.log('✅ Redirecting to home page with full reload');
-        window.location.href = '/';
+        // 必须获取用户信息，否则AuthContext认为未认证
+        try {
+          const userInfo = await AuthService.getCurrentUser();
+          localStorage.setItem('auth_user', JSON.stringify(userInfo));
+          console.log('✅ User info saved:', userInfo);
+          
+          // 更新Context状态
+          setCloudConnected(true);
+          
+          // 设置成功状态（会显示成功页面）
+          setStatus('success');
+          setMessage('授权成功！');
+          
+          // 短暂显示成功页面后跳转
+          setTimeout(() => {
+            console.log('✅ Redirecting to home page with full reload');
+            window.location.href = '/';
+          }, 800); // 显示成功页面800ms
+        } catch (e) {
+          console.error('Failed to get user info:', e);
+          setStatus('error');
+          setError('获取用户信息失败');
+        }
         return;
       }
       
