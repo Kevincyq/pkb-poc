@@ -22,17 +22,45 @@ const AuthCallback: React.FC = () => {
 
   const handleOAuthCallback = async () => {
     try {
-      // 从URL参数获取code和state
-      const code = searchParams.get('code');
-      const state = searchParams.get('state');
+      // 检查是否是后端直接重定向（带token）
+      const token = searchParams.get('token');
+      const success = searchParams.get('success');
       const errorParam = searchParams.get('error');
-
-      // 检查是否有错误参数
-      if (errorParam) {
+      
+      // 检查是否有错误
+      if (success === 'false' || errorParam) {
         setStatus('error');
-        setError(`OAuth授权失败: ${errorParam}`);
+        setError(errorParam || 'OAuth授权失败');
         return;
       }
+      
+      if (token && success === 'true') {
+        // 后端已经处理了OAuth，直接保存token
+        localStorage.setItem('auth_token', token);
+        localStorage.setItem('cloud_connected', 'true');
+        setCloudConnected(true);
+        
+        // 获取用户信息
+        try {
+          const userInfo = await AuthService.getCurrentUser();
+          localStorage.setItem('auth_user', JSON.stringify(userInfo));
+        } catch (e) {
+          console.error('Failed to get user info:', e);
+        }
+        
+        setStatus('success');
+        setMessage('Google OAuth授权成功！');
+        
+        // 延迟跳转到主页面
+        setTimeout(() => {
+          navigate('/');
+        }, 2000);
+        return;
+      }
+      
+      // 旧的流程：从URL参数获取code和state（用于直接OAuth回调）
+      const code = searchParams.get('code');
+      const state = searchParams.get('state');
 
       // 检查必要参数
       if (!code || !state) {

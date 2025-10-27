@@ -256,27 +256,24 @@ async def google_callback(code: str, state: str, db: Session = Depends(get_db)):
         # 生成JWT token
         jwt_token = create_jwt_token(user)
         
-        return {
-            "success": True,
-            "user": {
-                "id": str(user.id),
-                "email": user.email,
-                "display_name": user.display_name,
-                "avatar_url": user.avatar_url,
-                "is_google_user": True
-            },
-            "token": jwt_token,
-            "drive_access_confirmed": True,
-            "redirect_url": "/dashboard"
-        }
+        # 构建前端URL（使用前端域名而非后端域名）
+        frontend_url = "https://test-pkb.kmchat.cloud/auth/callback"
+        
+        # 将token和用户信息通过URL参数传递给前端
+        import urllib.parse
+        redirect_url = f"{frontend_url}?token={jwt_token}&success=true"
+        
+        # 返回重定向响应
+        return RedirectResponse(url=redirect_url)
         
     except Exception as e:
         logger.error(f"Google OAuth callback error: {e}")
-        return {
-            "success": False,
-            "error": str(e),
-            "redirect_url": "/login?error=oauth_failed"
-        }
+        # 构建错误重定向URL
+        import urllib.parse
+        frontend_url = "https://test-pkb.kmchat.cloud/auth/callback"
+        error_param = urllib.parse.quote(str(e))
+        redirect_url = f"{frontend_url}?success=false&error={error_param}"
+        return RedirectResponse(url=redirect_url)
 
 @router.get("/auth/me")
 async def get_current_user_info(current_user: User = Depends(get_current_user), 
