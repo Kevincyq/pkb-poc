@@ -196,27 +196,33 @@ class DocumentProcessor:
         根据文件名检测文件类型
         
         Args:
-            filename: 文件名
+            filename: 文件名或路径
             
         Returns:
             检测到的文件类型
         """
-        filename_lower = filename.lower()
+        # 使用 Path 提取文件名和扩展名，处理路径中的文件名
+        path = Path(filename)
+        filename_lower = path.name.lower()
+        suffix = path.suffix.lower()
         
         # PDF 文件
-        if filename_lower.endswith('.pdf'):
+        if suffix == '.pdf' or filename_lower.endswith('.pdf'):
             return 'pdf'
         
         # Markdown 文件
-        elif any(filename_lower.endswith(ext) for ext in ['.md', '.markdown', '.mdown', '.mkd']):
+        elif suffix in ['.md', '.markdown', '.mdown', '.mkd'] or \
+             any(filename_lower.endswith(ext) for ext in ['.md', '.markdown', '.mdown', '.mkd']):
             return 'markdown'
         
         # 图片文件
-        elif any(filename_lower.endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']):
+        elif suffix in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'] or \
+             any(filename_lower.endswith(ext) for ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']):
             return 'image'
         
         # 其他文本文件
         else:
+            logger.warning(f"Could not determine file type for: {filename}, using 'text' as default")
             return 'text'
     
     def _detect_type_from_content(self, content: str) -> str:
