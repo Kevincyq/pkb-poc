@@ -257,7 +257,8 @@ async def google_callback(code: str, state: str, db: Session = Depends(get_db)):
         jwt_token = create_jwt_token(user)
         
         # 构建前端URL（使用前端域名而非后端域名）
-        frontend_url = "https://test-pkb.kmchat.cloud/auth/callback"
+        frontend_url = os.getenv('FRONTEND_BASE_URL', 'https://test-pkb.kmchat.cloud')
+        frontend_url = f"{frontend_url}/auth/callback"
         
         # 将token和用户信息通过URL参数传递给前端
         import urllib.parse
@@ -270,7 +271,8 @@ async def google_callback(code: str, state: str, db: Session = Depends(get_db)):
         logger.error(f"Google OAuth callback error: {e}")
         # 构建错误重定向URL
         import urllib.parse
-        frontend_url = "https://test-pkb.kmchat.cloud/auth/callback"
+        frontend_url = os.getenv('FRONTEND_BASE_URL', 'https://test-pkb.kmchat.cloud')
+        frontend_url = f"{frontend_url}/auth/callback"
         error_param = urllib.parse.quote(str(e))
         redirect_url = f"{frontend_url}?success=false&error={error_param}"
         return RedirectResponse(url=redirect_url)

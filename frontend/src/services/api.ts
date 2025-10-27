@@ -32,25 +32,22 @@ const api = axios.create({
 // 请求拦截器
 api.interceptors.request.use(
   (config) => {
-    // 移除URL尾随斜杠（避免FastAPI路由问题）
-    if (config.url && config.url.endsWith('/') && config.url.length > 1) {
-      config.url = config.url.slice(0, -1);
-      console.log('🔧 Removed trailing slash from URL:', config.url);
+    // ✅ 强制移除URL尾随斜杠（避免FastAPI路由问题）
+    if (config.url && config.url.length > 1) {
+      config.url = config.url.replace(/\/+$/, '');  // 移除所有尾随斜杠
+      console.log('🔧 Cleaned URL:', config.url);
     }
     
-    // 自动添加认证头（如果存在token）
+    // ✅ 自动添加认证头（如果存在token）
     const token = localStorage.getItem('auth_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
-      console.log('🔐 Adding auth header with token:', token.substring(0, 20) + '...');
+      console.log('🔐 Added auth header');
     } else {
-      console.log('⚠️ No auth token found in localStorage');
+      console.log('⚠️ No auth token found');
     }
     
-    console.log('🌐 Making request to:', config.url);
-    console.log('📋 Full config:', config);
-    console.log('🏠 Base URL:', config.baseURL);
-    console.log('🎯 Final URL:', (config.baseURL || '') + (config.url || ''));
+    console.log('🌐 Request:', config.method?.toUpperCase(), config.url);
     return config;
   },
   (error) => {
@@ -62,68 +59,64 @@ api.interceptors.request.use(
 // 响应拦截器
 api.interceptors.response.use(
   (response) => {
-    console.log('Response received:', response);
+    // 成功响应直接返回
     return response;
   },
   async (error) => {
-    if (error.response) {
-      console.error('API Error Response:', error.response.data);
-      console.error('API Error Status:', error.response.status);
-      console.error('API Error URL:', error.config?.url);
-      console.error('API Error Headers:', error.response.headers);
+    if (!error.response) {
+      // 网络错误
+      console.error('❌ Network error:', error.message);
+      return Promise.reject(error);
+    }
+
+    const status = error.response.status;
+    const errorDetail = error.response.data?.detail || '';
+    const errorUrl = error.config?.url || '';
+    
+    console.error(`❌ API Error [${status}]:`, errorUrl, errorDetail);
+    
+    // ✅ 处理401错误
+    if (status === 401) {
+      // 检查是否是在认证页面
+      const isAuthPage = window.location.pathname === '/login' || 
+                        window.location.pathname === '/auth/callback';
       
-      // 处理401未授权错误
-      if (error.response.status === 401) {
-        const errorDetail = error.response.data?.detail || '';
-        const errorUrl = error.config?.url || '';
-        
-        // 检查是否是在认证页面（这些页面允许401）
-        const isAuthPage = window.location.pathname === '/login' || 
-                          window.location.pathname === '/auth/callback' ||
-                          window.location.pathname.startsWith('/api/auth');
-        
-        if (isAuthPage) {
-          console.log('ℹ️ 401 in auth page - ignoring');
-          return Promise.reject(error);
-        }
-        
-        // 检查token是否存在
-        const token = localStorage.getItem('auth_token');
-        if (!token) {
-          console.log('⚠️ No token in localStorage');
-          return Promise.reject(error);
-        }
-        
-        // 检查是否是明确的认证失败
-        const isAuthFailure = errorDetail.includes('authorization header') || 
-                             errorDetail.includes('Missing') ||
-                             errorDetail.includes('Invalid token') ||
-                             errorDetail.includes('User not found');
-        
-        if (isAuthFailure) {
-          console.log('🔐 Authentication failure detected - clearing token');
-          localStorage.removeItem('auth_token');
-          localStorage.removeItem('auth_user');
-          localStorage.removeItem('cloud_connected');
-          
-          // 延迟重定向
-          setTimeout(() => {
-            if (window.location.pathname !== '/login' && window.location.pathname !== '/auth/callback') {
-              console.log('🔄 Redirecting to login page');
-              window.location.href = '/login';
-            }
-          }, 2000);
-        } else {
-          // 其他401错误，可能只是路由不存在
-          console.log('⚠️ 401 error but not confirmed auth failure, ignoring');
-        }
+      if (isAuthPage) {
+        console.log('ℹ️ 401 in auth page - ignoring');
+        return Promise.reject(error);
       }
       
-    } else if (error.request) {
-      console.error('API Request Error (No Response):', error.request);
-    } else {
-      console.error('API Error Setup:', error.message);
+      // 检查token是否存在
+      const token = localStorage.getItem('auth_token');
+      if (!token) {
+        console.log('⚠️ No token - user not logged in');
+        return Promise.reject(error);
+      }
+      
+      // ✅ 检查是否是明确的认证失败（而不是路由不存在）
+      const isAuthFailure = errorDetail.includes('authorization header') || 
+                           errorDetail.includes('Missing') ||
+                           errorDetail.includes('Invalid token') ||
+                           errorDetail.includes('User not found');
+      
+      if (isAuthFailure) {
+        console.log('🔐 Authentication failure - logging out');
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('auth_user');
+        localStorage.removeItem('cloud_connected');
+        
+        setTimeout(() => {
+          if (window.location.pathname !== '/login') {
+            window.location.href = '/login';
+          }
+        }, 1500);
+      } else {
+        // ✅ 路由不存在或其他原因导致的401，静默忽略
+        console.log('ℹ️ 401 from route issue, ignoring:', errorUrl);
+      }
     }
+    
+    // 其他错误
     return Promise.reject(error);
   }
 );
