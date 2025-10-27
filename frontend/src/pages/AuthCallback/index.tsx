@@ -35,41 +35,15 @@ const AuthCallback: React.FC = () => {
       }
       
       if (token && success === 'true') {
-        // 后端已经处理了OAuth，直接保存token
+        // 后端已经处理了OAuth，直接保存token和基本用户信息
         console.log('✅ Saving token to localStorage:', token.substring(0, 20) + '...');
         localStorage.setItem('auth_token', token);
         localStorage.setItem('cloud_connected', 'true');
         
-        // 获取用户信息user info
-        try {
-          const userInfo = await AuthService.getCurrentUser();
-          localStorage.setItem('auth_user', JSON.stringify(userInfo));
-          console.log('✅ User info saved:', userInfo);
-          
-          // 更新Context状态
-          setCloudConnected(true);
-          
-          // 确保localStorage已写入
-          console.log('✅ Checking localStorage after save:');
-          console.log('  - auth_token:', localStorage.getItem('auth_token')?.substring(0, 20));
-          console.log('  - auth_user:', localStorage.getItem('auth_user')?.substring(0, 50));
-          
-          // 设置成功状态
-          setStatus('success');
-          setMessage('授权成功，正在跳转...');
-          
-          // 使用 window.location.href 进行完整的页面重新加载
-          // 这样 AuthContext 可以正确从 localStorage 加载认证状态
-          setTimeout(() => {
-            console.log('✅ Redirecting to home page with full reload');
-            window.location.href = '/';
-          }, 500);
-        } catch (e) {
-          console.error('Failed to get user info:', e);
-          setStatus('error');
-          setError('获取用户信息失败');
-          return;
-        }
+        // 立即重定向到首页（不需要等待后端API调用）
+        // AuthContext会从后端获取完整的用户信息
+        console.log('✅ Redirecting to home page with full reload');
+        window.location.href = '/';
         return;
       }
       
