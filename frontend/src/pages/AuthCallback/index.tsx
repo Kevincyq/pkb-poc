@@ -54,10 +54,16 @@ const AuthCallback: React.FC = () => {
           console.log('  - auth_token:', localStorage.getItem('auth_token')?.substring(0, 20));
           console.log('  - auth_user:', localStorage.getItem('auth_user')?.substring(0, 50));
           
-          // 使用 navigate 而不是 window.location.href，避免页面重新加载丢失状态
+          // 设置成功状态
+          setStatus('success');
+          setMessage('授权成功，正在跳转...');
+          
+          // 使用 window.location.href 进行完整的页面重新加载
+          // 这样 AuthContext 可以正确从 localStorage 加载认证状态
           setTimeout(() => {
-            navigate('/', { replace: true });
-          }, 100);
+            console.log('✅ Redirecting to home page with full reload');
+            window.location.href = '/';
+          }, 500);
         } catch (e) {
           console.error('Failed to get user info:', e);
           setStatus('error');
