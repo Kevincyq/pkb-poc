@@ -718,14 +718,18 @@ def download_and_parse_cloud_file(content_id: str):
         logger.error(f"Error in download_and_parse_cloud_file task: {e}")
         
         # 更新错误状态
-        if content and content.meta:
-            content.meta["parsing_status"] = "failed"
-            content.meta["processing_status"] = "failed"
-            content.meta["error"] = str(e)
-            from sqlalchemy.orm.attributes import flag_modified
-            flag_modified(content, 'meta')
-            db.commit()
+        try:
+            if 'content' in locals() and content and hasattr(content, 'meta') and content.meta:
+                content.meta["parsing_status"] = "failed"
+                content.meta["processing_status"] = "failed"
+                content.meta["error"] = str(e)
+                from sqlalchemy.orm.attributes import flag_modified
+                flag_modified(content, 'meta')
+                db.commit()
+        except Exception as db_error:
+            logger.error(f"Failed to update error status: {db_error}")
         
         return {"success": False, "error": str(e)}
     finally:
-        db.close()
+        if 'db' in locals():
+            db.close()
