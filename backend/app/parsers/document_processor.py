@@ -56,14 +56,19 @@ class DocumentProcessor:
             if file_type is None:
                 file_type = self.detect_file_type(file_path)
             
+            logger.info(f"🔍 Detected file type: {file_type} for file: {file_path}")
+            
             # 选择合适的解析器
             parser = self._get_parser(file_type)
             if parser is None:
+                logger.error(f"❌ No parser found for file type: {file_type}")
                 return {
                     "text": "",
                     "metadata": {"error": f"Unsupported file type: {file_type}"},
                     "success": False
                 }
+            
+            logger.info(f"✅ Selected parser: {type(parser).__name__} for file: {file_path}")
             
             # 解析文件
             result = parser.parse_file(file_path)

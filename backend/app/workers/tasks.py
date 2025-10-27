@@ -618,7 +618,8 @@ def download_and_parse_cloud_file(content_id: str):
                 # 解析文件内容
                 logger.info(f"📄 Parsing file: {temp_file.name}, title: {content.title}")
                 processor = DocumentProcessor()
-                parse_result = processor.process_file(temp_file.name, content.title)
+                # ✅ 不要传入title作为file_type，让DocumentProcessor自动检测
+                parse_result = processor.process_file(temp_file.name, file_type=None)
                 
                 logger.info(f"📋 Parse result: success={parse_result.get('success')}, text_length={len(parse_result.get('text', ''))}, metadata={parse_result.get('metadata')}")
                 
