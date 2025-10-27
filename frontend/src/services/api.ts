@@ -72,51 +72,50 @@ api.interceptors.response.use(
       console.error('API Error URL:', error.config?.url);
       console.error('API Error Headers:', error.response.headers);
       
-      // 处理401未授权错误 - 只在特定情况下重定向
+      // 处理401未授权错误
       if (error.response.status === 401) {
-        const errorDetail = error.response.data?.detail;
+        const errorDetail = error.response.data?.detail || '';
         const errorUrl = error.config?.url || '';
-        console.log('🔐 401 Unauthorized - error detail:', errorDetail);
-        console.log('🔐 401 URL:', errorUrl);
         
-        // 检查是否是在认证页面或回调页面（这些页面允许401）
+        // 检查是否是在认证页面（这些页面允许401）
         const isAuthPage = window.location.pathname === '/login' || 
                           window.location.pathname === '/auth/callback' ||
                           window.location.pathname.startsWith('/api/auth');
         
         if (isAuthPage) {
-          console.log('ℹ️ 401 in auth/callback page - ignoring');
+          console.log('ℹ️ 401 in auth page - ignoring');
           return Promise.reject(error);
         }
         
         // 检查token是否存在
         const token = localStorage.getItem('auth_token');
         if (!token) {
-          console.log('⚠️ No token in localStorage, user not logged in');
+          console.log('⚠️ No token in localStorage');
           return Promise.reject(error);
         }
         
-        // token存在但401，可能是token过期或无效
-        // 但不确定是所有请求都失败还是只有部分失败
-        // 先记录错误，不立即重定向
-        console.log('⚠️ 401 with valid token - might be temporary issue');
-        console.log('  - Not redirecting immediately');
-        console.log('  - Will redirect if multiple 401s occur');
+        // 检查是否是明确的认证失败
+        const isAuthFailure = errorDetail.includes('authorization header') || 
+                             errorDetail.includes('Missing') ||
+                             errorDetail.includes('Invalid token') ||
+                             errorDetail.includes('User not found');
         
-        // 如果错误详情明确说是认证问题，才清除token
-        if (errorDetail?.includes('authorization header') || errorDetail?.includes('token')) {
-          console.log('🔐 Confirmed auth failure - clearing token');
+        if (isAuthFailure) {
+          console.log('🔐 Authentication failure detected - clearing token');
           localStorage.removeItem('auth_token');
           localStorage.removeItem('auth_user');
           localStorage.removeItem('cloud_connected');
           
-          // 延迟重定向，避免在页面加载时立即重定向
+          // 延迟重定向
           setTimeout(() => {
             if (window.location.pathname !== '/login' && window.location.pathname !== '/auth/callback') {
-              console.log('🔄 Redirecting to login page after 3s');
+              console.log('🔄 Redirecting to login page');
               window.location.href = '/login';
             }
-          }, 3000);
+          }, 2000);
+        } else {
+          // 其他401错误，可能只是路由不存在
+          console.log('⚠️ 401 error but not confirmed auth failure, ignoring');
         }
       }
       

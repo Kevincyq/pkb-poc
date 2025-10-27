@@ -74,10 +74,7 @@ export const deleteCollection = async (id: string): Promise<void> => {
     console.log('ID type:', typeof id);
     console.log('Making DELETE request to:', `/collection/${id}`);
     
-    // 首先检查API是否存在
-    const testResponse = await api.get('/collection');
-    console.log('Collection API exists, status:', testResponse.status);
-    
+    // 直接删除，不需要测试请求
     const response = await api.delete(`/collection/${id}`);
     
     console.log('Delete response status:', response.status);
