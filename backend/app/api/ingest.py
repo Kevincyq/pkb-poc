@@ -626,29 +626,60 @@ async def upload_file_smart(
         file_content = await file.read()
         file_size = len(file_content)
         
-        # 使用存储策略服务
-        from ..services.storage_strategy_service import StorageStrategyService
-        strategy_service = StorageStrategyService()
-        
-        result = await strategy_service.upload_file(
-            file_content, file.filename, str(current_user.id), db, preferred_provider
-        )
-        
-        if not result["success"]:
-            if result.get("auth_required"):
-                return {
-                    "success": False,
-                    "auth_required": True,
-                    "provider": result["provider"],
-                    "message": result["error"],
-                    "available_providers": result.get("available_providers", [])
-                }
-            else:
-                raise HTTPException(400, result["error"])
-        
         # 判断文件类型
         file_extension = Path(file.filename).suffix.lower()
         is_image = file_extension in {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'}
+        
+        # ✅ 优化：所有文件都先保存到本地（用于解析）
+        # 无论大文件还是小文件，都先在本地进行解析
+        upload_dir = Path("/app/uploads")
+        upload_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 生成唯一文件名
+        from datetime import datetime
+        import uuid as uuid_module
+        actual_filename = file.filename
+        base_path = upload_dir / actual_filename
+        if base_path.exists():
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            name_part = Path(file.filename).stem
+            extension = Path(file.filename).suffix
+            actual_filename = f"{name_part}_{timestamp}{extension}"
+        
+        file_path = upload_dir / actual_filename
+        with open(file_path, "wb") as f:
+            f.write(file_content)
+        
+        # ✅ 决定最终存储策略（大文件上传到云盘，小文件保持本地）
+        storage_provider = "local"  # 默认本地
+        cloud_file_id = None
+        source_uri = f"webui://{actual_filename}"  # 默认本地URI
+        
+        try:
+            # 检查是否需要上传到云盘
+            threshold = int(os.getenv('LARGE_FILE_THRESHOLD', 5 * 1024 * 1024))  # 5MB
+            
+            if file_size >= threshold:
+                # 大文件：上传到Google Drive
+                from ..services.storage_strategy_service import StorageStrategyService
+                strategy_service = StorageStrategyService()
+                
+                cloud_result = await strategy_service.upload_file(
+                    file_content, file.filename, str(current_user.id), db, preferred_provider
+                )
+                
+                if cloud_result.get("success") and cloud_result.get("strategy") == "cloud":
+                    storage_provider = cloud_result.get("provider", "google_drive")
+                    cloud_file_id = cloud_result.get("file_id")
+                    source_uri = cloud_result.get("source_uri", f"{storage_provider}://{cloud_file_id}")
+                    log.info(f"✅ Large file uploaded to {storage_provider}: {file.filename}")
+                else:
+                    # 云盘上传失败，保留本地文件
+                    source_uri = f"webui://{actual_filename}"
+                    log.warning(f"⚠️ Cloud upload failed, keeping local: {file.filename}")
+        except Exception as cloud_error:
+            log.error(f"⚠️ Cloud upload error, keeping local: {cloud_error}")
+            source_uri = f"webui://{actual_filename}"
         
         # 创建Content记录
         content_record = Content(
@@ -656,19 +687,17 @@ async def upload_file_smart(
             text="",  # 异步解析后填充
             modality='image' if is_image else 'text',
             user_id=current_user.id,
-            storage_provider=result.get("provider", "local"),  # ✅ 使用实际的provider（google_drive），而不是strategy（cloud）
-            cloud_file_id=result.get("file_id"),
+            storage_provider=storage_provider,
+            cloud_file_id=cloud_file_id,
             file_size=file_size,
-            source_uri=result["source_uri"],
+            source_uri=source_uri,
             meta={
-                "storage_strategy": result["strategy"],
-                "file_path": result.get("file_path"),
-                "cloud_provider": result.get("provider"),
+                "file_path": str(file_path),
                 "processing_status": "uploaded",
                 "classification_status": "pending",
                 "parsing_status": "pending",
                 "original_filename": file.filename,
-                "stored_filename": result.get("filename", file.filename),
+                "stored_filename": actual_filename,
             },
             created_by="webui.smart_upload"
         )
@@ -677,24 +706,14 @@ async def upload_file_smart(
         db.commit()
         db.refresh(content_record)
         
-        # 异步处理任务
+        # ✅ 统一使用本地文件路径进行解析（无论是本地还是云盘存储）
         try:
-            if result["strategy"] == "local":
-                # 本地文件立即触发解析
-                from app.workers.tasks import parse_and_chunk_file
-                task_result = parse_and_chunk_file.apply_async(
-                    args=[str(content_record.id), result.get("file_path", "")],
-                    queue='quick'
-                )
-                log.info(f"✅ Scheduled parse_and_chunk_file task for content {content_record.id}: {task_result.id}")
-            else:
-                # 云盘文件需要先下载再解析
-                from app.workers.tasks import download_and_parse_cloud_file
-                task_result = download_and_parse_cloud_file.apply_async(
-                    args=[str(content_record.id)],
-                    queue='heavy'
-                )
-                log.info(f"✅ Scheduled download_and_parse_cloud_file task for content {content_record.id}: {task_result.id}")
+            from app.workers.tasks import parse_and_chunk_file
+            task_result = parse_and_chunk_file.apply_async(
+                args=[str(content_record.id), str(file_path)],
+                queue='quick'
+            )
+            log.info(f"✅ Scheduled parse_and_chunk_file task for content {content_record.id}: {task_result.id}")
         except Exception as task_error:
             log.error(f"❌ Failed to schedule async task for content {content_record.id}: {task_error}")
             # 即使任务调度失败，也返回成功（文件已上传）
@@ -707,10 +726,10 @@ async def upload_file_smart(
             "processing_status": "uploaded",
             "chunks_created": 0,
             "file_size": file_size,
-            "message": f"文件已{'上传到云盘' if result['strategy'] == 'cloud' else '保存到本地'}",
+            "message": f"文件已{'上传到云盘' if storage_provider != 'local' else '保存到本地'}",
             # 额外信息
-            "storage_strategy": result["strategy"],
-            "provider": result.get("provider"),
+            "storage_strategy": "cloud" if storage_provider != "local" else "local",
+            "provider": storage_provider,
         }
         
     except Exception as e:
