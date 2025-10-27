@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Row, Col, Button, message, Upload, Modal, Input, Drawer, Select, Slider, Tag, Progress, Avatar, Dropdown } from 'antd';
+import { useState, useEffect, useRef } from 'react';
+import { Row, Col, Button, message, Upload, Modal, Input, Drawer, Select, Slider, Tag, Progress, Avatar } from 'antd';
 import NativeTooltip from '../../components/NativeTooltip';
 import { SearchOutlined, PlusOutlined, FileTextOutlined, FilterOutlined, InfoCircleOutlined, UserOutlined, LogoutOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
@@ -41,6 +41,8 @@ export default function Home() {
   const [uploadFiles, setUploadFiles] = useState<UploadFileStatus[]>([]);
   const [uploadDrawerVisible, setUploadDrawerVisible] = useState(false);
   const [createCollectionModalVisible, setCreateCollectionModalVisible] = useState(false);
+  const [userMenuVisible, setUserMenuVisible] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   
   // 批次状态管理
   interface BatchStats {
@@ -82,6 +84,23 @@ export default function Home() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // 处理点击外部关闭菜单
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setUserMenuVisible(false);
+      }
+    };
+
+    if (userMenuVisible) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [userMenuVisible]);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -302,11 +321,16 @@ export default function Home() {
   };
 
   const handleLogout = () => {
+    setUserMenuVisible(false);
     logout();
     message.success('已退出登录');
     navigate('/login');
     // 清除所有查询缓存
     queryClient.clear();
+  };
+
+  const toggleUserMenu = () => {
+    setUserMenuVisible(!userMenuVisible);
   };
 
   const handleCollectionClick = (_categoryId: string, categoryName: string) => {
@@ -828,44 +852,11 @@ export default function Home() {
           gap: '16px',
           alignItems: 'center'
         }}>
-          {/* 用户信息下拉菜单 */}
-          <Dropdown
-            menu={{
-              items: [
-                {
-                  key: 'user-info',
-                  label: (
-                    <div style={{ padding: '8px 0' }}>
-                      <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
-                        {user?.display_name || user?.email}
-                      </div>
-                      <div style={{ fontSize: '12px', color: '#666' }}>
-                        {user?.is_google_user ? 'Google用户' : '测试用户'}
-                      </div>
-                    </div>
-                  ),
-                  disabled: true,
-                },
-                {
-                  type: 'divider',
-                },
-                {
-                  key: 'logout',
-                  label: '退出登录',
-                  icon: <LogoutOutlined />,
-                },
-              ],
-              onClick: ({ key }) => {
-                if (key === 'logout') {
-                  handleLogout();
-                }
-              },
-            }}
-            placement="bottomRight"
-            trigger={['click']}
-          >
+          {/* 用户信息菜单 - 原生实现 */}
+          <div style={{ position: 'relative' }} ref={userMenuRef}>
             <Button
               type="text"
+              onClick={toggleUserMenu}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -884,7 +875,60 @@ export default function Home() {
                 {user?.display_name || user?.email}
               </span>
             </Button>
-          </Dropdown>
+            
+            {userMenuVisible && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: '8px',
+                  background: '#fff',
+                  border: '1px solid #d9d9d9',
+                  borderRadius: '6px',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+                  minWidth: '160px',
+                  zIndex: 1000,
+                }}
+              >
+                {/* 用户信息 */}
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid #f0f0f0' }}>
+                  <div style={{ fontWeight: 'bold', marginBottom: '4px', fontSize: '14px' }}>
+                    {user?.display_name || user?.email}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#666' }}>
+                    {user?.is_google_user ? 'Google用户' : '测试用户'}
+                  </div>
+                </div>
+                
+                {/* 分割线 */}
+                <div style={{ height: '1px', background: '#f0f0f0' }} />
+                
+                {/* 退出登录 */}
+                <div
+                  onClick={handleLogout}
+                  style={{
+                    padding: '8px 16px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '14px',
+                    transition: 'background 0.2s',
+                  }}
+                  onMouseEnter={(e) => {
+                    (e.currentTarget as HTMLElement).style.background = '#f5f5f5';
+                  }}
+                  onMouseLeave={(e) => {
+                    (e.currentTarget as HTMLElement).style.background = '#fff';
+                  }}
+                >
+                  <LogoutOutlined />
+                  <span>退出登录</span>
+                </div>
+              </div>
+            )}
+          </div>
           <Button
             type="text"
             icon={<SearchOutlined style={{ fontSize: '18px' }} />}
