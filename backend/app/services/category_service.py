@@ -143,6 +143,9 @@ class CategoryService:
                 logger.error(f"Content {content_id} not found or access denied for user {self.user_id}")
                 return {"success": False, "error": "Content not found or access denied"}
             
+            # 保存content.id为content_uuid变量（供后续使用）
+            content_uuid = content.id
+            
             # 检查是否已分类
             existing_classification = self.db.query(ContentCategory).filter(
                 ContentCategory.content_id == content.id
