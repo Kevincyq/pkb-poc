@@ -20,7 +20,8 @@ def get_db():
     finally: 
         db.close()
 
-# ✅ 优先注册根路径搜索，避免被其他路由覆盖
+# ✅ 优先注册根路径搜索，避免被其他路由覆盖  
+@router.get("")
 @router.get("/")
 async def search(
     query: str = Query(None, alias="q", description="搜索查询"),
