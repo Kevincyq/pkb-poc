@@ -44,7 +44,7 @@ class CollectionResponse(BaseModel):
     created_at: str
     updated_at: str
 
-# ✅ 同时支持 / 和 "" 以避免FastAPI的自动重定向
+# ✅ 同时支持 "" 和 "/" 以避免FastAPI的自动重定向
 @router.get("", response_model=List[CollectionResponse])
 @router.get("/", response_model=List[CollectionResponse])
 def get_collections(
@@ -117,6 +117,8 @@ def get_collections(
         logger.error(f"获取合集列表失败: {e}")
         raise HTTPException(status_code=500, detail=f"获取合集列表失败: {str(e)}")
 
+# ✅ 同时支持 "" 和 "/" 以避免FastAPI的自动重定向
+@router.post("", response_model=CollectionResponse)
 @router.post("/", response_model=CollectionResponse)
 def create_collection(
     collection_data: CollectionCreate,
