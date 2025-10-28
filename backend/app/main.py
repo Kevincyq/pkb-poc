@@ -79,13 +79,18 @@ class ProxyHeadersMiddleware(BaseHTTPMiddleware):
         if "x-forwarded-ssl" in request.headers and request.headers["x-forwarded-ssl"] == "on":
             request.scope["scheme"] = "https"
         
-        # ✅ 移除API路径的尾随斜杠
+        # ✅ 移除API路径的尾随斜杠（避免无限重定向）
         path = request.url.path
-        if path.endswith('/') and len(path) > 1 and '/api/' in path:
-            # 对于API路径，移除尾随斜杠
-            request.scope['path'] = path.rstrip('/')
-            logger.debug(f"Removed trailing slash from path: {path} -> {request.scope['path']}")
-            
+        
+        # FastAPI会自动处理尾随斜杠，我们的中间件可能会造成冲突
+        # 最佳方案：只在特定情况下移除斜杠，避免循环重定向
+        
+        # 检查是否是搜索API的特殊情况
+        if path == '/api/search/' and request.method == 'GET':
+            # 对于搜索API，直接移除斜杠
+            request.scope['path'] = '/api/search'
+            logger.debug(f"Force removed trailing slash from search API: {path}")
+        
         response = await call_next(request)
         return response
 

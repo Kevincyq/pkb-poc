@@ -126,12 +126,13 @@ async def search(
 async def get_search_suggestions(
     q: str = Query(..., description="部分查询"),
     limit: int = Query(5, description="建议数量"),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """获取搜索建议"""
+    """获取搜索建议（用户隔离）"""
     # URL解码查询参数
     decoded_q = unquote(q) if q else ""
-    search_service = SearchService(db)
+    search_service = SearchService(db, user_id=str(current_user.id))  # ✅ 传递用户ID
     suggestions = search_service.get_search_suggestions(decoded_q, limit)
     
     return {
@@ -144,15 +145,16 @@ async def search_by_category(
     category_id: str,
     q: Optional[str] = Query(None, description="搜索查询"),
     top_k: int = Query(20, description="返回结果数量"),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    按分类搜索内容
+    按分类搜索内容（用户隔离）
     """
     try:
         # URL解码查询参数
         decoded_q = unquote(q) if q else None
-        search_service = SearchService(db)
+        search_service = SearchService(db, user_id=str(current_user.id))  # ✅ 传递用户ID
         results = search_service.search_by_category(category_id, decoded_q, top_k)
         
         if not isinstance(results, dict):

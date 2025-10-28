@@ -110,7 +110,12 @@ class SearchService:
             
             # 用户隔离：只搜索当前用户的内容
             if self.user_id:
-                base_query = base_query.filter(Content.user_id == self.user_id)
+                from uuid import UUID
+                user_uuid = UUID(self.user_id) if isinstance(self.user_id, str) else self.user_id
+                logger.info(f"🔍 Filtering by user_id: {self.user_id} (UUID: {user_uuid})")
+                base_query = base_query.filter(Content.user_id == user_uuid)
+            else:
+                logger.warning("⚠️ No user_id provided, searching all content")
             
             # 应用过滤条件
             if filters:
@@ -145,6 +150,7 @@ class SearchService:
                     params[param_name] = f"%{term}%"
             
             results = base_query.filter(or_(*conditions)).params(**params).limit(top_k).all()
+            logger.info(f"📊 Keyword search found {len(results)} results after exact match")
             
             # 2. 如果没有结果，尝试分词匹配
             if not results:
@@ -163,6 +169,7 @@ class SearchService:
                         )
                         params[param_name] = f"%{word}%"
                     results = base_query.filter(and_(*conditions)).params(**params).limit(top_k).all()
+                    logger.info(f"📊 Keyword search found {len(results)} results after word match")
             
             # 3. 如果还是没有结果，尝试更宽松的匹配
             if not results:
@@ -184,7 +191,9 @@ class SearchService:
                     
                     # 相关性过滤
                     results = self._filter_by_relevance(results, query, top_k)
+                    logger.info(f"📊 Keyword search found {len(results)} results after relevance filter")
             
+            logger.info(f"✅ Keyword search completed with {len(results)} final results")
             return self._format_search_results(results, query, "keyword")
             
         except Exception as e:
@@ -737,7 +746,9 @@ class SearchService:
                 
                 # 用户隔离：只统计当前用户的内容
                 if self.user_id:
-                    query = query.filter(Content.user_id == self.user_id)
+                    from uuid import UUID
+                    user_uuid = UUID(self.user_id) if isinstance(self.user_id, str) else self.user_id
+                    query = query.filter(Content.user_id == user_uuid)
                 
                 content_count = query.scalar() or 0
                 
