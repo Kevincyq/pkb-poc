@@ -20,7 +20,7 @@ class Content(Base):
     meta       = Column(JSON, nullable=True)        # {people, project, topics, ...}
     
     # 用户和存储相关字段
-    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)  # ✅ 强制用户隔离
     storage_provider = Column(String, nullable=True)  # 'local' | 'google_drive' | 'nextcloud'
     cloud_file_id = Column(String, nullable=True)    # 云盘文件ID或路径
     file_size = Column(Integer, nullable=True)        # 文件大小（字节）
@@ -161,7 +161,7 @@ class Collection(Base):
     category_id = Column(UUID(as_uuid=True), ForeignKey("categories.id"), nullable=True)
     auto_generated = Column(Boolean, default=True)  # 是否自动生成
     query_rules = Column(JSON, nullable=True)       # 自动合集的查询规则
-    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=True)  # ✅ 用户隔离
+    user_id = Column(UUID(as_uuid=True), ForeignKey('users.id'), nullable=False)  # ✅ 强制用户隔离
     created_at = Column(TIMESTAMP, default=datetime.utcnow)
     updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow)
     

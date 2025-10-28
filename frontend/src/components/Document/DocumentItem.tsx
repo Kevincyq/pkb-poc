@@ -78,6 +78,9 @@ export default function DocumentItem({ document, onClick }: DocumentItemProps) {
     } else if (sourceUri.includes('nextcloud://')) {
       fileName = sourceUri.replace('nextcloud://', '');
       console.log(`☁️ Nextcloud file extracted: "${fileName}"`);
+    } else if (sourceUri.includes('google_drive://')) {
+      fileName = sourceUri.replace('google_drive://', '');
+      console.log(`🗂️ Google Drive file extracted: "${fileName}"`);
     } else {
       // 如果没有协议前缀，直接使用文件名
       fileName = sourceUri;

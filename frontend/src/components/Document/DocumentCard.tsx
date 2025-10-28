@@ -137,6 +137,14 @@ function DocumentCard({
       return thumbnailUrl;
     }
     
+    // ✅ 支持Google Drive文件的缩略图
+    if (sourceUri.includes('google_drive://')) {
+      const fileId = sourceUri.replace('google_drive://', '');
+      const thumbnailUrl = `${apiBaseUrl}/files/thumbnail/${fileId}`;
+      console.log(`🗂️ Google Drive thumbnail URL: ${thumbnailUrl}`);
+      return thumbnailUrl;
+    }
+    
     console.log(`❌ No thumbnail URL generated for: ${sourceUri}`);
     return null;
   };

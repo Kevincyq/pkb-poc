@@ -310,13 +310,20 @@ async def get_file_thumbnail(filename: str, db: Session = Depends(get_db)):
         # 1. 通过title查找
         content = db.query(Content).filter(Content.title == filename).first()
         
-        # 2. 通过source_uri查找
+        # 2. 通过source_uri查找（支持webui://和google_drive://）
         if not content:
+            # 尝试webui://
             content = db.query(Content).filter(
                 Content.source_uri == f"webui://{filename}"
             ).first()
         
-        # 3. 通过cloud_file_id查找
+        # 3. 通过google_drive://source_uri查找
+        if not content:
+            content = db.query(Content).filter(
+                Content.source_uri.like(f"%{filename}%")
+            ).first()
+        
+        # 4. 通过cloud_file_id查找
         if not content and len(filename) > 20:
             content = db.query(Content).filter(Content.cloud_file_id == filename).first()
         

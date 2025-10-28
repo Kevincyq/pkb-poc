@@ -34,7 +34,19 @@ export default function PreviewContent({ document }: PreviewContentProps) {
   // 获取图片URL（优先使用缩略图，失败时使用原图）
   const getImageUrls = (sourceUri: string) => {
     const apiBaseUrl = getApiBaseUrl();
-    const fileName = sourceUri.replace(/^(webui|nextcloud):\/\//, '');
+    
+    let fileName = '';
+    
+    // 提取文件名或文件ID
+    if (sourceUri.includes('webui://')) {
+      fileName = sourceUri.replace('webui://', '');
+    } else if (sourceUri.includes('nextcloud://')) {
+      fileName = sourceUri.replace('nextcloud://', '');
+    } else if (sourceUri.includes('google_drive://')) {
+      fileName = sourceUri.replace('google_drive://', '');
+    } else {
+      fileName = sourceUri;
+    }
     
     return {
       // 优先使用缩略图（更快加载）
