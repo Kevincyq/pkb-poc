@@ -139,12 +139,14 @@ class QAService:
             if collection_id:
                 filters["collection_id"] = collection_id
             
+            logger.info(f"🔍 QA searching: question='{question}', search_type={search_type}, filters={filters}")
             search_results = self.search_service.search(
                 query=question, 
                 top_k=5, 
                 search_type=search_type,
                 filters=filters if filters else None
             )
+            logger.info(f"📊 QA search returned: {search_results.get('total', 0)} results")
             
             if not search_results["results"]:
                 return {
@@ -157,7 +159,9 @@ class QAService:
                 }
             
             # 2. 构建上下文
+            logger.info(f"📚 Building context from {len(search_results['results'])} search results")
             context, sources = self._build_context(search_results["results"], context_limit)
+            logger.info(f"📚 Context built: {len(sources)} unique documents, context length: {len(context)} chars")
             
             # 3. 获取历史对话（如果有会话ID）
             conversation_history = self._get_conversation_history(session_id) if session_id else []
@@ -220,16 +224,44 @@ class QAService:
             }
     
     def _build_context(self, search_results: List[Dict], limit: int) -> Tuple[str, List[Dict]]:
-        """构建上下文和来源信息"""
+        """构建上下文和来源信息（文档级别去重，保留最高分）"""
+        seen_content_ids = {}  # 用于去重，跟踪已添加的最佳文档
+        
+        # 第一次遍历：去重并保留每个文档得分最高的chunk
+        for result in search_results:
+            content_id = result["content_id"]
+            
+            # 去重：同一文档保留得分最高的chunk
+            if content_id in seen_content_ids:
+                existing_result = seen_content_ids[content_id]
+                if result["score"] > existing_result["score"]:
+                    # 替换为更高分的chunk
+                    logger.debug(f"Replacing {result['title']} with better score: {existing_result['score']:.3f} -> {result['score']:.3f}")
+                    seen_content_ids[content_id] = result
+            else:
+                # 标记该文档已被添加
+                seen_content_ids[content_id] = result
+        
+        # 按分数排序去重后的结果
+        unique_results = list(seen_content_ids.values())
+        unique_results.sort(key=lambda x: x["score"], reverse=True)
+        
+        logger.info(f"🔄 Deduplication: {len(search_results)} chunks -> {len(unique_results)} unique docs")
+        for i, result in enumerate(unique_results[:3]):
+            logger.info(f"  Doc {i+1}: {result['title'][:50]} (score: {result['score']:.3f})")
+        
+        # 第二次遍历：构建上下文和来源信息
         context_parts = []
         sources = []
         current_length = 0
         
-        for i, result in enumerate(search_results, 1):
-            source_info = f"[文档{i}: {result['title']}]"
+        for i, result in enumerate(unique_results):
+            doc_number = i + 1
+            source_info = f"[文档{doc_number}: {result['title']}]"
             content = f"{source_info}\\n{result['text']}\\n"
             
             if current_length + len(content) > limit:
+                logger.info(f"⚠️ Context limit reached at document {doc_number}/{len(unique_results)}")
                 break
             
             context_parts.append(content)
@@ -248,6 +280,7 @@ class QAService:
             })
         
         context = "\\n".join(context_parts)
+        logger.info(f"✅ Final context: {len(sources)} docs, {len(context)} chars")
         return context, sources
     
     def _filter_high_quality_sources(self, sources: List[Dict], question: str) -> List[Dict]:

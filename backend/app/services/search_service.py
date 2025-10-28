@@ -55,6 +55,7 @@ class SearchService:
             搜索结果字典
         """
         start_time = time.time()
+        logger.info(f"🔍 Search request: query='{query}', type={search_type}, top_k={top_k}, filters={filters}")
         
         try:
             if search_type == "keyword":
@@ -69,6 +70,13 @@ class SearchService:
             # 更新搜索统计
             self._update_search_stats(query, len(results))
             
+            logger.info(f"✅ Search completed: {len(results)} results in {response_time:.3f}s")
+            
+            # 打印结果概览
+            if results:
+                for i, r in enumerate(results[:3]):
+                    logger.info(f"  Result {i+1}: {r.get('title', 'N/A')[:50]} (score: {r.get('score', 0):.3f})")
+            
             return {
                 "query": query,
                 "results": results,
@@ -79,7 +87,7 @@ class SearchService:
             }
             
         except Exception as e:
-            logger.error(f"Search error: {e}")
+            logger.error(f"❌ Search error: {e}", exc_info=True)
             error_response = {
                 "query": query,
                 "results": [],
@@ -89,7 +97,7 @@ class SearchService:
                 "embedding_enabled": self.embedding_service.is_enabled(),
                 "error": str(e)
             }
-            logger.error(f"Search error response: {error_response}")
+            logger.error(f"❌ Search error response: {error_response}")
             return error_response
     
     def _keyword_search(self, query: str, top_k: int, filters: Optional[Dict] = None) -> List[Dict]:
@@ -501,13 +509,18 @@ class SearchService:
         return formatted_results
     
     def _format_semantic_results(self, results: List[Tuple], query: str) -> List[Dict]:
-        """格式化语义搜索结果"""
+        """格式化语义搜索结果（文档级别去重）"""
         formatted_results = []
         seen_content_ids = {}  # 用于去重，存储 content_id -> 最佳结果
         
         # 智能确定相似度阈值和文件类型过滤
         similarity_threshold = self._get_dynamic_similarity_threshold(query)
         expected_modality = self._infer_expected_modality(query)
+        
+        logger.info(f"📋 Formatting semantic results: {len(results)} chunks, threshold={similarity_threshold:.3f}")
+        
+        duplicates_skipped = 0
+        docs_added = 0  # 实际添加的唯一文档数
         
         for row in results:
             # 处理原生 SQL 查询结果
@@ -516,10 +529,12 @@ class SearchService:
             
             # 动态相似度过滤
             if similarity < similarity_threshold:
+                logger.debug(f"Skipped due to low similarity: {row.title} (sim={similarity:.3f})")
                 continue
             
             # 文件类型智能过滤
             if not self._is_modality_match(query, row.modality, expected_modality, similarity):
+                logger.debug(f"Skipped due to modality mismatch: {row.title} (modality={row.modality})")
                 continue
             
             current_result = {
@@ -543,25 +558,42 @@ class SearchService:
             
             # 去重逻辑：同一文档只保留得分最高的chunk
             content_id = str(row.content_id)
-            if content_id not in seen_content_ids or current_result["score"] > seen_content_ids[content_id]["score"]:
+            if content_id in seen_content_ids:
+                existing_score = seen_content_ids[content_id]["score"]
+                if current_result["score"] > existing_score:
+                    logger.debug(f"Replacing chunk for {row.title}: {existing_score:.3f} -> {current_result['score']:.3f}")
+                    seen_content_ids[content_id] = current_result
+                    duplicates_skipped += 1  # 替换了chunk，原有chunk被丢弃
+                else:
+                    logger.debug(f"Skipping lower score chunk for {row.title}: {current_result['score']:.3f} <= {existing_score:.3f}")
+                    duplicates_skipped += 1  # 跳过了这个chunk
+            else:
                 seen_content_ids[content_id] = current_result
+                docs_added += 1
+                logger.debug(f"New document: {row.title} (sim={current_result['score']:.3f})")
         
         # 提取去重后的结果
         formatted_results = list(seen_content_ids.values())
         
         # 按分数排序
         formatted_results.sort(key=lambda x: x["score"], reverse=True)
+        
+        logger.info(f"✅ Formatted {docs_added} unique documents from {len(results)} chunks (skipped {duplicates_skipped} duplicate chunks)")
+        
         return formatted_results
     
     def _merge_search_results(self, keyword_results: List[Dict], semantic_results: List[Dict], top_k: int) -> List[Dict]:
         """合并关键词和语义搜索结果（基于文档级别去重）"""
         merged = {}
         
+        logger.info(f"🔀 Merging results: keyword={len(keyword_results)}, semantic={len(semantic_results)}")
+        
         # 添加关键词结果（权重 0.6）
         for result in keyword_results:
             content_id = result["content_id"]
             result["score"] *= 0.6
             merged[content_id] = result
+            logger.debug(f"Added keyword result: {result['title']} (ID: {content_id[:8]})")
         
         # 添加语义结果（权重 0.4）
         for result in semantic_results:
@@ -574,6 +606,7 @@ class SearchService:
                     result["score"] = new_score
                     result["match_type"] = "hybrid"
                     merged[content_id] = result
+                    logger.debug(f"Updated with better semantic chunk: {result['title']}")
                 else:
                     # 否则只更新分数和匹配类型
                     merged[content_id]["score"] = new_score
@@ -581,10 +614,18 @@ class SearchService:
             else:
                 result["score"] *= 0.4
                 merged[content_id] = result
+                logger.debug(f"Added semantic result: {result['title']} (ID: {content_id[:8]})")
+        
+        logger.info(f"🔀 Merged results: {len(merged)} unique documents")
         
         # 排序并返回
         final_results = list(merged.values())
         final_results.sort(key=lambda x: x["score"], reverse=True)
+        
+        # 打印前3个结果
+        for i, r in enumerate(final_results[:3]):
+            logger.info(f"  Merged result {i+1}: {r['title']} (score: {r['score']:.3f})")
+        
         return final_results[:top_k]
     
     def _calculate_relevance_score(self, text: str, title: str, query: str) -> float:

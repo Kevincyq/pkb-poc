@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request
+import time
 from app.api import ingest, search, operator, qa, agent, document, embedding, category, collection, files, files_improved, auth
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
@@ -66,32 +67,33 @@ def initialize_default_user():
 initialize_default_user()
 
 class ProxyHeadersMiddleware(BaseHTTPMiddleware):
-    """处理代理头的中间件，确保FastAPI正确识别HTTPS协议"""
+    """处理代理头和日志记录"""
     async def dispatch(self, request: Request, call_next):
         # 检查代理头，修正协议信息
         if "x-forwarded-proto" in request.headers:
             forwarded_proto = request.headers["x-forwarded-proto"]
             if forwarded_proto == "https":
-                # 确保FastAPI知道这是HTTPS请求
                 request.scope["scheme"] = "https"
         
         # 处理X-Forwarded-Ssl头
         if "x-forwarded-ssl" in request.headers and request.headers["x-forwarded-ssl"] == "on":
             request.scope["scheme"] = "https"
         
-        # ✅ 移除API路径的尾随斜杠（避免无限重定向）
         path = request.url.path
+        method = request.method
         
-        # FastAPI会自动处理尾随斜杠，我们的中间件可能会造成冲突
-        # 最佳方案：只在特定情况下移除斜杠，避免循环重定向
+        # 记录API请求
+        if '/api/' in path and method in ['GET', 'POST', 'PUT', 'DELETE']:
+            logger.debug(f"📥 {method} {path}")
         
-        # 检查是否是搜索API的特殊情况
-        if path == '/api/search/' and request.method == 'GET':
-            # 对于搜索API，直接移除斜杠
-            request.scope['path'] = '/api/search'
-            logger.debug(f"Force removed trailing slash from search API: {path}")
-        
+        start_time = time.time()
         response = await call_next(request)
+        elapsed = time.time() - start_time
+        
+        # 记录慢请求和错误响应
+        if elapsed > 1.0 or response.status_code >= 400:
+            logger.warning(f"⚠️ {method} {path} -> {response.status_code} ({elapsed:.3f}s)")
+        
         return response
 
 app = FastAPI(
@@ -99,7 +101,8 @@ app = FastAPI(
         version="0.1.0",
         docs_url="/api/docs",
         openapi_url="/api/openapi.json",
-        redoc_url=None
+        redoc_url=None,
+        redirect_slashes=False  # ✅ 禁用自动重定向，避免斜杠问题
         )
 
 # 加上代理头处理中间件（必须在CORS之前）
