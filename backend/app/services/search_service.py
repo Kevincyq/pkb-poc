@@ -257,23 +257,27 @@ class SearchService:
             
             # 用户隔离：只搜索当前用户的内容
             if self.user_id:
-                where_conditions.append("contents.user_id::text = %(user_id)s")
+                from uuid import UUID
+                user_uuid = UUID(self.user_id) if isinstance(self.user_id, str) else self.user_id
+                logger.info(f"🔍 Semantic search filtering by user_id: {self.user_id}")
+                # 使用CAST转换为UUID类型进行比较
+                where_conditions.append("contents.user_id = CAST(:user_id AS UUID)")
                 params['user_id'] = str(self.user_id)
             
             if filters:
                 if filters.get('modality'):
-                    where_conditions.append("contents.modality = %(modality)s")
+                    where_conditions.append("contents.modality = :modality")
                     params['modality'] = filters['modality']
                 if filters.get('category'):
                     # 支持按分类ID或分类名称筛选
                     category_value = filters['category']
                     if isinstance(category_value, str) and len(category_value) == 36:  # UUID格式
-                        where_conditions.append("categories.id = %(category)s")
+                        where_conditions.append("categories.id = CAST(:category AS UUID)")
                     else:
-                        where_conditions.append("categories.name = %(category)s")
+                        where_conditions.append("categories.name = :category")
                     params['category'] = category_value
                 if filters.get('created_by'):
-                    where_conditions.append("contents.created_by = %(created_by)s")
+                    where_conditions.append("contents.created_by = :created_by")
                     params['created_by'] = filters['created_by']
             
             if where_conditions:
@@ -289,10 +293,28 @@ class SearchService:
             sql = text(base_sql)
             
             # 执行查询
-            if params:
-                results = self.db.execute(sql, params).fetchall()
-            else:
-                results = self.db.execute(sql).fetchall()
+            try:
+                if params:
+                    # 使用 .bindparams() 来绑定命名参数
+                    bound_sql = sql.bindparams(**params)
+                    results = self.db.execute(bound_sql).fetchall()
+                    logger.info(f"📊 Semantic search executed with params: {list(params.keys())}")
+                else:
+                    results = self.db.execute(sql).fetchall()
+                    logger.info(f"📊 Semantic search executed without params")
+                
+                logger.info(f"📊 Semantic search found {len(results)} results")
+                
+                # 打印前3个结果的概览
+                if results and len(results) > 0:
+                    for i, row in enumerate(results[:3]):
+                        logger.info(f"  Result {i+1}: {row.title[:50] if hasattr(row, 'title') else 'N/A'} (distance: {row.distance if hasattr(row, 'distance') else 'N/A'})")
+                
+            except Exception as e:
+                logger.error(f"Error executing semantic search SQL: {e}")
+                logger.error(f"SQL: {base_sql[:200]}...")
+                logger.error(f"Params: {params}")
+                raise
             
             # 使用格式化方法应用去重逻辑
             return self._format_semantic_results(results, query)
