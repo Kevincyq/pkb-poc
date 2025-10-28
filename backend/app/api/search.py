@@ -13,15 +13,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-@router.get("/health")
-async def search_health():
-    """搜索服务健康检查"""
-    return {
-        "status": "ok",
-        "service": "search",
-        "timestamp": "2024-10-04T03:00:00Z"
-    }
-
 def get_db():
     db = SessionLocal()
     try: 
@@ -29,6 +20,7 @@ def get_db():
     finally: 
         db.close()
 
+# ✅ 优先注册根路径搜索，避免被其他路由覆盖
 @router.get("/")
 async def search(
     query: str = Query(None, alias="q", description="搜索查询"),
@@ -47,8 +39,10 @@ async def search(
 ):
     """
     增强搜索接口，支持关键词、语义和混合搜索
+    
+    GET /api/search/ 或 /api/search
     """
-    logger.info(f"🔍 Search endpoint called with query={query}")
+    logger.info(f"🔍 SEARCH ENDPOINT CALLED: query={query}, top_k={top_k}")
     # 构建过滤条件
     filters = {}
     if modality:
@@ -188,3 +182,12 @@ async def get_category_search_stats(
     stats = search_service.get_category_stats()
     
     return stats
+
+@router.get("/health")
+async def search_health():
+    """搜索服务健康检查"""
+    return {
+        "status": "ok",
+        "service": "search",
+        "timestamp": "2024-10-04T03:00:00Z"
+    }
