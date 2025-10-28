@@ -48,6 +48,7 @@ async def search(
     """
     增强搜索接口，支持关键词、语义和混合搜索
     """
+    logger.info(f"🔍 Search endpoint called with query={query}")
     # 构建过滤条件
     filters = {}
     if modality:
