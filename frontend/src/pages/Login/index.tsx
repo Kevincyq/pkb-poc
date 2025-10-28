@@ -106,7 +106,7 @@ const LoginPage: React.FC = () => {
 
             <Button
               type="default"
-              icon={<GoogleOutlined />}
+              icon={<GoogleOutlined style={{ color: '#4285F4' }} />}
               onClick={handleGoogleLogin}
               loading={googleLoading}
               className="google-login-button"
