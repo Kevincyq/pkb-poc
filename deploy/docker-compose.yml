@@ -15,18 +15,6 @@ services:
     image: redis:7
     networks: [internal]
 
-  # MaxKB 独立服务 - 与 PKB 无依赖关系
-  maxkb:
-    image: registry.fit2cloud.com/maxkb/maxkb:latest
-    ports:
-      - "127.0.0.1:7861:8080"             # 独立端口，可通过 Nginx 反代访问
-    volumes:
-      - maxkb_data:/opt/maxkb             # 使用 Docker volume 而不是主机路径
-    restart: always
-    networks: [internal]
-    profiles: ["maxkb"]                   # 使用 profile 控制启动
-    # 注意：MaxKB 完全独立，不依赖其他服务
-
   pkb-backend:
     build: ../backend
     env_file: .env
@@ -110,7 +98,7 @@ services:
 
   nextcloud:
     image: nextcloud:apache
-    depends_on: [postgres, redis]        # 不依赖 MaxKB
+    depends_on: [postgres, redis]
     ports:
       - "127.0.0.1:8080:80"            # 宿主 8080 → 容器 80（供 Nginx 反代）
     environment:
@@ -194,5 +182,4 @@ networks:
 volumes:
   pgdata:
   nextcloud_data:
-  maxkb_data:                             # MaxKB 独立数据卷
 
