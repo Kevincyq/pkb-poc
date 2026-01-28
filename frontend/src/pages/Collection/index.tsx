@@ -6,7 +6,6 @@ import { useQuery } from '@tanstack/react-query';
 import MainLayout from '../../components/Layout/MainLayout';
 import DocumentCard from '../../components/Document/DocumentCard';
 import AIChat from '../../components/AIChat';
-import Search from '../../components/Search';
 import EmptyState from '../../components/EmptyState';
 import { getCategoryDocuments } from '../../services/collectionService';
 import type { CollectionDocument } from '../../types/collection';
@@ -14,17 +13,11 @@ import type { CollectionDocument } from '../../types/collection';
 export default function Collection() {
   const { categoryName } = useParams<{ categoryName: string }>();
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState<string>('');
-
   const { data, isLoading, error } = useQuery({
-    queryKey: ['collection', categoryName, searchQuery],
-    queryFn: () => getCategoryDocuments(categoryName || '', searchQuery),
+    queryKey: ['collection', categoryName],
+    queryFn: () => getCategoryDocuments(categoryName || ''),
     enabled: !!categoryName,
   });
-
-  const handleSearch = (value: string) => {
-    setSearchQuery(value);
-  };
 
   const handleDocumentClick = (document: CollectionDocument) => {
     console.log('Open document:', document);
@@ -56,7 +49,7 @@ export default function Collection() {
           color: '#666'
         }}>
           <span style={{ cursor: 'pointer' }} onClick={() => navigate('/')}>
-            个人知识库助理
+            Inspiration AI
           </span>
           <span>/</span>
           <span style={{ color: '#333' }}>{categoryName}</span>
@@ -64,7 +57,6 @@ export default function Collection() {
         
         {/* 右侧操作区 */}
         <Space className="collection-actions" size={16}>
-          <Search onSearch={handleSearch} />
           <Button 
             type="text" 
             icon={<PlusOutlined />}
@@ -87,16 +79,6 @@ export default function Collection() {
           <EmptyState type="searching" />
         ) : (
           <>
-            {searchQuery && (
-              <div style={{ 
-                marginBottom: '16px',
-                fontSize: '14px',
-                color: '#666'
-              }}>
-                为您搜索到以下内容
-              </div>
-            )}
-            
             {data?.results && data.results.length > 0 ? (
               <>
                 <div style={{ marginBottom: '16px', fontSize: '14px', color: '#666' }}>
@@ -121,24 +103,15 @@ export default function Collection() {
               </Row>
               </>
             ) : (
-              searchQuery ? (
-                <div style={{ 
-                  marginTop: '40px',
-                  textAlign: 'center' 
-                }}>
-                  <EmptyState type="noResult" />
-                </div>
-              ) : (
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'center', 
-                  alignItems: 'center', 
-                  height: '200px',
-                  color: '#999'
-                }}>
-                  <p>该合集暂无文档</p>
-                </div>
-              )
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'center', 
+                alignItems: 'center', 
+                height: '200px',
+                color: '#999'
+              }}>
+                <p>该合集暂无文档</p>
+              </div>
             )}
           </>
         )}

@@ -7,13 +7,14 @@ import type { QAMessage } from '../types/qa';
 export interface QAAssistantState {
   visible: boolean;
   initialQuestion: string;
+  selectedCategories?: string[];
   messages: QAMessage[];
   isLoading: boolean;
   error: string | null;
 }
 
 export interface QAAssistantActions {
-  show: (initialQuestion?: string) => void;
+  show: (initialQuestion?: string, categories?: string[]) => void;
   hide: () => void;
   toggle: () => void;
   setInitialQuestion: (question: string) => void;
@@ -26,6 +27,7 @@ export interface QAAssistantActions {
 export function useQAAssistant(): QAAssistantState & QAAssistantActions {
   const [visible, setVisible] = useState(false);
   const [initialQuestion, setInitialQuestionState] = useState('');
+  const [selectedCategories, setSelectedCategories] = useState<string[] | undefined>(undefined);
   const [messages] = useState<QAMessage[]>([]);
   const [isLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,11 +35,12 @@ export function useQAAssistant(): QAAssistantState & QAAssistantActions {
   const initialQuestionRef = useRef<string>('');
 
   // 显示问答助理
-  const show = useCallback((question?: string) => {
+  const show = useCallback((question?: string, categories?: string[]) => {
     if (question) {
       setInitialQuestionState(question);
       initialQuestionRef.current = question;
     }
+    setSelectedCategories(categories);
     setVisible(true);
     setError(null);
   }, []);
@@ -76,6 +79,7 @@ export function useQAAssistant(): QAAssistantState & QAAssistantActions {
     // 状态
     visible,
     initialQuestion,
+    selectedCategories,
     messages,
     isLoading,
     error,

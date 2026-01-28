@@ -1,16 +1,17 @@
-import { useState, useEffect, useRef } from 'react';
-import { Row, Col, Button, message, Upload, Modal, Input, Drawer, Select, Slider, Tag, Progress, Avatar } from 'antd';
+import { useState, useEffect } from 'react';
+import { Row, Col, Button, message, Upload, Modal, Drawer, Progress, Input } from 'antd';
 import NativeTooltip from '../../components/NativeTooltip';
-import { SearchOutlined, PlusOutlined, FileTextOutlined, FilterOutlined, InfoCircleOutlined, UserOutlined, LogoutOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { PlusOutlined, FileTextOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { useAuth } from '../../stores/AuthContext';
 import MainLayout from '../../components/Layout/MainLayout';
 import CollectionCard from '../../components/Collection/CollectionCard';
 import AIInput from '../../components/AIInput/AIInput';
 import UploadStatusCard, { type UploadFileStatus } from '../../components/Upload/UploadStatusCard';
 import CreateCollectionModal from '../../components/Collection/CreateCollectionModal';
-import SearchOverlay from '../../components/SearchOverlay';
+import HistoryPanel from '../../components/HistoryPanel';
+import RecommendedQuestions from '../../components/RecommendedQuestions';
+import { useQAAssistant } from '../../hooks/useQAAssistant';
 import type { UploadProps } from 'antd';
 import * as collectionService from '../../services/collectionManageService';
 import { uploadFile, getProcessingStatus } from '../../services/uploadService';
@@ -30,7 +31,8 @@ type CustomCollection = collectionService.CustomCollection;
 export default function Home() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { user, logout, cloudConnected, isAuthenticated, isLoading: authLoading } = useAuth();
+  const qaAssistant = useQAAssistant();
+  // 不再需要认证相关的状态
   const [categories, setCategories] = useState<Category[]>([]);
   const [customCollections, setCustomCollections] = useState<CustomCollection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -41,8 +43,6 @@ export default function Home() {
   const [uploadFiles, setUploadFiles] = useState<UploadFileStatus[]>([]);
   const [uploadDrawerVisible, setUploadDrawerVisible] = useState(false);
   const [createCollectionModalVisible, setCreateCollectionModalVisible] = useState(false);
-  const [userMenuVisible, setUserMenuVisible] = useState(false);
-  const userMenuRef = useRef<HTMLDivElement>(null);
   
   // 批次状态管理
   interface BatchStats {
@@ -66,56 +66,11 @@ export default function Home() {
     return { total, completed, failed, processing, overallProgress };
   };
   
-  // 搜索相关状态
-  const [searchModalVisible, setSearchModalVisible] = useState(false);
-  const [searchOverlayVisible, setSearchOverlayVisible] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [searchFilters, setSearchFilters] = useState({
-    categories: [] as string[],
-    collections: [] as string[],
-    modality: undefined as string | undefined,
-    role: undefined as string | undefined,
-    source: undefined as string | undefined,
-    confidence: [0, 1] as [number, number]
-  });
 
-  // 等待认证完成后再加载数据
+  // 直接加载数据，不需要认证检查
   useEffect(() => {
-    // 如果还在认证检查中，等待
-    if (authLoading) {
-      console.log('⏳ Waiting for auth to complete...');
-      return;
-    }
-    
-    // 如果未认证，不要加载数据（AuthGuard会重定向到登录页）
-    if (!isAuthenticated) {
-      console.log('⚠️ User not authenticated, skipping data load');
-      return;
-    }
-    
-    // 认证完成且用户已登录，加载数据
-    console.log('✅ User authenticated, loading data...');
     loadData();
-  }, [authLoading, isAuthenticated]);
-
-  // 处理点击外部关闭菜单
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
-        setUserMenuVisible(false);
-      }
-    };
-
-    if (userMenuVisible) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [userMenuVisible]);
+  }, []);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -168,97 +123,6 @@ export default function Home() {
   // 保持向后兼容
   const loadCategories = loadData;
 
-  const handleSearch = () => {
-    setSearchOverlayVisible(true);
-  };
-
-  const performSearch = async () => {
-    const trimmedQuery = searchQuery.trim();
-    if (!trimmedQuery) {
-      message.warning('请输入搜索关键词');
-      return;
-    }
-
-    // 验证搜索查询长度
-    if (trimmedQuery.length > 200) {
-      message.warning('搜索关键词过长，请缩短后重试');
-      return;
-    }
-
-    setSearchLoading(true);
-    try {
-      // 构建搜索参数
-      const params = new URLSearchParams();
-      params.append('q', trimmedQuery);
-      params.append('top_k', '20');
-      params.append('search_type', 'hybrid');
-
-      // 添加过滤条件
-      if (searchFilters.categories.length > 0) {
-        params.append('categories', searchFilters.categories.join(','));
-      }
-      if (searchFilters.collections.length > 0) {
-        params.append('collections', searchFilters.collections.join(','));
-      }
-      if (searchFilters.modality) {
-        params.append('modality', searchFilters.modality);
-      }
-      if (searchFilters.role) {
-        params.append('role', searchFilters.role);
-      }
-      if (searchFilters.source) {
-        params.append('source', searchFilters.source);
-      }
-      if (searchFilters.confidence[0] > 0) {
-        params.append('confidence_min', searchFilters.confidence[0].toString());
-      }
-      if (searchFilters.confidence[1] < 1) {
-        params.append('confidence_max', searchFilters.confidence[1].toString());
-      }
-
-      const response = await api.get(`/search?${params.toString()}`);
-      
-      // 验证响应数据
-      if (!response.data) {
-        throw new Error('搜索响应数据为空');
-      }
-      
-      const results = response.data.results || [];
-      setSearchResults(results);
-      
-      if (results.length === 0) {
-        message.info('没有找到相关内容，请尝试使用不同的关键词或调整过滤条件');
-      } else {
-        console.log(`🔍 Search completed: found ${results.length} results`);
-      }
-    } catch (error: any) {
-      console.error('Search error:', error);
-      
-      // 更详细的错误处理
-      if (error.response?.status === 400) {
-        message.error('搜索参数有误，请检查输入');
-      } else if (error.response?.status === 500) {
-        message.error('服务器错误，请稍后重试');
-      } else if (error.code === 'NETWORK_ERROR') {
-        message.error('网络连接失败，请检查网络');
-      } else {
-        message.error('搜索失败，请重试');
-      }
-    } finally {
-      setSearchLoading(false);
-    }
-  };
-
-  const resetSearchFilters = () => {
-    setSearchFilters({
-      categories: [],
-      collections: [],
-      modality: undefined,
-      role: undefined,
-      source: undefined,
-      confidence: [0, 1]
-    });
-  };
 
   const handleCreateCollection = () => {
     setCreateCollectionModalVisible(true);
@@ -335,17 +199,9 @@ export default function Home() {
     console.log('AI Input:', value);
   };
 
-  const handleLogout = () => {
-    setUserMenuVisible(false);
-    logout();
-    message.success('已退出登录');
-    navigate('/login');
-    // 清除所有查询缓存
-    queryClient.clear();
-  };
-
-  const toggleUserMenu = () => {
-    setUserMenuVisible(!userMenuVisible);
+  // 处理历史记录或推荐问题点击
+  const handleQuestionClick = (question: string) => {
+    qaAssistant.show(question);
   };
 
   const handleCollectionClick = (_categoryId: string, categoryName: string) => {
@@ -817,9 +673,16 @@ export default function Home() {
   };
 
   // 对合集进行排序
-  const sortedCategories = categories.sort((a, b) => {
-    const order = ['职场商务', '科技前沿', '学习成长', '生活点滴'];
-    return order.indexOf(a.name) - order.indexOf(b.name);
+  // 系统分类固定顺序：Business, Learning, Life, Technology, Art
+  const categoryOrder = ['Business', 'Learning', 'Life', 'Technology', 'Art'];
+  const sortedCategories = [...categories].sort((a, b) => {
+    const indexA = categoryOrder.indexOf(a.name);
+    const indexB = categoryOrder.indexOf(b.name);
+    // 如果分类不在预定义列表中，放在最后
+    if (indexA === -1 && indexB === -1) return 0;
+    if (indexA === -1) return 1;
+    if (indexB === -1) return -1;
+    return indexA - indexB;
   });
 
   // 对自建合集按创建时间倒序排序
@@ -843,120 +706,14 @@ export default function Home() {
             color: '#1f1f1f',
             lineHeight: '28px'
           }}>
-            个人知识库助理
+            Inspiration AI
           </h1>
-          {cloudConnected && (
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '4px 8px',
-              backgroundColor: '#f6ffed',
-              border: '1px solid #b7eb8f',
-              borderRadius: '6px',
-              fontSize: '12px',
-              color: '#52c41a'
-            }}>
-              <CheckCircleOutlined />
-              <span>云盘已连接</span>
-            </div>
-          )}
         </div>
         <div className="home-actions" style={{
           display: 'flex',
           gap: '16px',
           alignItems: 'center'
         }}>
-          {/* 用户信息菜单 - 原生实现 */}
-          <div style={{ position: 'relative' }} ref={userMenuRef}>
-            <Button
-              type="text"
-              onClick={toggleUserMenu}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '4px 8px',
-                height: 'auto'
-              }}
-            >
-              <Avatar
-                size="small"
-                icon={<UserOutlined />}
-                src={user?.avatar_url}
-                style={{ backgroundColor: '#1677ff' }}
-              />
-              <span style={{ fontSize: '14px', color: '#1f1f1f' }}>
-                {user?.display_name || user?.email}
-              </span>
-            </Button>
-            
-            {userMenuVisible && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '100%',
-                  right: 0,
-                  marginTop: '8px',
-                  background: '#fff',
-                  border: '1px solid #d9d9d9',
-                  borderRadius: '6px',
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-                  minWidth: '160px',
-                  zIndex: 1000,
-                }}
-              >
-                {/* 用户信息 */}
-                <div style={{ padding: '12px 16px', borderBottom: '1px solid #f0f0f0' }}>
-                  <div style={{ fontWeight: 'bold', marginBottom: '4px', fontSize: '14px' }}>
-                    {user?.display_name || user?.email}
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#666' }}>
-                    {user?.is_google_user ? 'Google用户' : '测试用户'}
-                  </div>
-                </div>
-                
-                {/* 分割线 */}
-                <div style={{ height: '1px', background: '#f0f0f0' }} />
-                
-                {/* 退出登录 */}
-                <div
-                  onClick={handleLogout}
-                  style={{
-                    padding: '8px 16px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    fontSize: '14px',
-                    transition: 'background 0.2s',
-                  }}
-                  onMouseEnter={(e) => {
-                    (e.currentTarget as HTMLElement).style.background = '#f5f5f5';
-                  }}
-                  onMouseLeave={(e) => {
-                    (e.currentTarget as HTMLElement).style.background = '#fff';
-                  }}
-                >
-                  <LogoutOutlined />
-                  <span>退出登录</span>
-                </div>
-              </div>
-            )}
-          </div>
-          <Button
-            type="text"
-            icon={<SearchOutlined style={{ fontSize: '18px' }} />}
-            onClick={handleSearch}
-            style={{
-              width: '32px',
-              height: '32px',
-              padding: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          />
           {uploadFiles.length > 0 && (
             <Button
               type="text"
@@ -1071,17 +828,18 @@ export default function Home() {
           </div>
         ) : (
           <Row gutter={[12, 12]}>
-            {/* Create Card */}
-            <Col xs={12} sm={8} md={6} lg={4} xl={4}>
-              <CollectionCard
-                title=""
-                contentCount={0}
-                isCreateCard
-                onClick={handleCreateCollection}
-              />
-            </Col>
+            {/* System Categories - 系统默认分类（固定顺序） */}
+            {sortedCategories.map(category => (
+              <Col xs={12} sm={8} md={6} lg={4} xl={4} key={category.id}>
+                <CollectionCard
+                  title={category.name}
+                  contentCount={category.content_count}
+                  onClick={() => handleCollectionClick(category.id, category.name)}
+                />
+              </Col>
+            ))}
             
-            {/* Custom Collections */}
+            {/* Custom Collections - 用户创建的合集 */}
             {sortedCustomCollections.map(collection => {
               console.log('Rendering collection:', collection.id, collection.name);
               return (
@@ -1101,18 +859,35 @@ export default function Home() {
               );
             })}
             
-            {/* System Categories */}
-            {sortedCategories.map(category => (
-              <Col xs={12} sm={8} md={6} lg={4} xl={4} key={category.id}>
-                <CollectionCard
-                  title={category.name}
-                  contentCount={category.content_count}
-                  onClick={() => handleCollectionClick(category.id, category.name)}
-                />
-              </Col>
-            ))}
+            {/* Create Card - 创建新合集按钮 */}
+            <Col xs={12} sm={8} md={6} lg={4} xl={4}>
+              <CollectionCard
+                title=""
+                contentCount={0}
+                isCreateCard
+                onClick={handleCreateCollection}
+              />
+            </Col>
           </Row>
         )}
+      </div>
+
+      {/* 任务历史和推荐问题区域 */}
+      <div style={{ 
+        marginBottom: '140px', // 为浮动的问答框留出空间（问答框高度增加了）
+        marginTop: '32px'
+      }}>
+        <Row gutter={[16, 16]}>
+          {/* 任务历史区域（竖屏时在上，横屏桌面端在左） */}
+          <Col xs={24} sm={24} md={24} lg={12} xl={12}>
+            <HistoryPanel onQuestionClick={handleQuestionClick} />
+          </Col>
+          
+          {/* 推荐问题区域（竖屏时在下，横屏桌面端在右） */}
+          <Col xs={24} sm={24} md={24} lg={12} xl={12}>
+            <RecommendedQuestions onQuestionClick={handleQuestionClick} />
+          </Col>
+        </Row>
       </div>
 
       <AIInput onSend={handleAIInput} />
@@ -1291,185 +1066,11 @@ export default function Home() {
         )}
       </Drawer>
 
-      {/* 搜索模态框 */}
-      <Modal
-        title="智能搜索"
-        open={searchModalVisible}
-        onCancel={() => setSearchModalVisible(false)}
-        width={800}
-        footer={[
-          <Button key="reset" onClick={resetSearchFilters}>
-            重置过滤器
-          </Button>,
-          <Button key="cancel" onClick={() => setSearchModalVisible(false)}>
-            取消
-          </Button>,
-          <Button key="search" type="primary" loading={searchLoading} onClick={performSearch}>
-            搜索
-          </Button>
-        ]}
-      >
-        <div style={{ marginBottom: '16px' }}>
-          <Input.Search
-            placeholder="输入搜索关键词..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onSearch={performSearch}
-            enterButton="搜索"
-            size="large"
-          />
-        </div>
-
-        {/* 过滤器 */}
-        <div style={{ marginBottom: '16px', padding: '16px', background: '#f5f5f5', borderRadius: '8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: '12px' }}>
-            <FilterOutlined style={{ marginRight: '8px' }} />
-            <span style={{ fontWeight: 'bold' }}>搜索过滤器</span>
-          </div>
-          
-          <Row gutter={[16, 16]}>
-            <Col span={12}>
-              <div style={{ marginBottom: '8px' }}>分类筛选：</div>
-              <Select
-                mode="multiple"
-                placeholder="选择分类"
-                style={{ width: '100%' }}
-                value={searchFilters.categories}
-                onChange={(value) => setSearchFilters(prev => ({ ...prev, categories: value }))}
-                options={categories.map(cat => ({ label: cat.name, value: cat.name }))}
-              />
-            </Col>
-            <Col span={12}>
-              <div style={{ marginBottom: '8px' }}>合集筛选：</div>
-              <Select
-                mode="multiple"
-                placeholder="选择合集"
-                style={{ width: '100%' }}
-                value={searchFilters.collections}
-                onChange={(value) => setSearchFilters(prev => ({ ...prev, collections: value }))}
-                options={customCollections.map(col => ({ label: col.name, value: col.name }))}
-              />
-            </Col>
-            <Col span={8}>
-              <div style={{ marginBottom: '8px' }}>文件类型：</div>
-              <Select
-                placeholder="选择类型"
-                style={{ width: '100%' }}
-                value={searchFilters.modality}
-                onChange={(value) => setSearchFilters(prev => ({ ...prev, modality: value }))}
-                allowClear
-                options={[
-                  { label: '文本', value: 'text' },
-                  { label: '图片', value: 'image' },
-                  { label: 'PDF', value: 'pdf' }
-                ]}
-              />
-            </Col>
-            <Col span={8}>
-              <div style={{ marginBottom: '8px' }}>分类角色：</div>
-              <Select
-                placeholder="选择角色"
-                style={{ width: '100%' }}
-                value={searchFilters.role}
-                onChange={(value) => setSearchFilters(prev => ({ ...prev, role: value }))}
-                allowClear
-                options={[
-                  { label: '主分类', value: 'primary_system' },
-                  { label: '次分类', value: 'secondary_system' },
-                  { label: '用户规则', value: 'user_rule' }
-                ]}
-              />
-            </Col>
-            <Col span={8}>
-              <div style={{ marginBottom: '8px' }}>分类来源：</div>
-              <Select
-                placeholder="选择来源"
-                style={{ width: '100%' }}
-                value={searchFilters.source}
-                onChange={(value) => setSearchFilters(prev => ({ ...prev, source: value }))}
-                allowClear
-                options={[
-                  { label: 'AI分类', value: 'ml' },
-                  { label: '规则分类', value: 'heuristic' },
-                  { label: '用户规则', value: 'rule' }
-                ]}
-              />
-            </Col>
-            <Col span={24}>
-              <div style={{ marginBottom: '8px' }}>置信度范围：</div>
-              <Slider
-                range
-                min={0}
-                max={1}
-                step={0.1}
-                value={searchFilters.confidence}
-                onChange={(value) => setSearchFilters(prev => ({ ...prev, confidence: value as [number, number] }))}
-                marks={{
-                  0: '0%',
-                  0.5: '50%',
-                  1: '100%'
-                }}
-              />
-            </Col>
-          </Row>
-        </div>
-
-        {/* 搜索结果 */}
-        {searchResults.length > 0 && (
-          <div>
-            <div style={{ marginBottom: '12px', fontWeight: 'bold' }}>
-              搜索结果 ({searchResults.length} 条)
-            </div>
-            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-              {searchResults.map((result, index) => (
-                <div
-                  key={index}
-                  style={{
-                    padding: '12px',
-                    border: '1px solid #e8e8e8',
-                    borderRadius: '8px',
-                    marginBottom: '8px',
-                    cursor: 'pointer'
-                  }}
-                  onClick={() => {
-                    // 跳转到文档详情或所属合集
-                    if (result.category_name) {
-                      navigate(`/collection/${encodeURIComponent(result.category_name)}`);
-                      setSearchModalVisible(false);
-                    }
-                  }}
-                >
-                  <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
-                    {result.title}
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#666', marginBottom: '8px' }}>
-                    {result.text?.substring(0, 150)}...
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    {result.category_name && (
-                      <Tag color="blue">📁 {result.category_name}</Tag>
-                    )}
-                    <Tag color="green">📊 {Math.round((result.score || 0) * 100)}%</Tag>
-                    <Tag color="orange">📅 {result.created_at?.split('T')[0]}</Tag>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </Modal>
-
       {/* 创建合集模态框 */}
       <CreateCollectionModal
         open={createCollectionModalVisible}
         onCancel={() => setCreateCollectionModalVisible(false)}
         onSuccess={handleCreateCollectionSuccess}
-      />
-
-      {/* 搜索覆盖层 */}
-      <SearchOverlay
-        visible={searchOverlayVisible}
-        onClose={() => setSearchOverlayVisible(false)}
       />
     </MainLayout>
   );

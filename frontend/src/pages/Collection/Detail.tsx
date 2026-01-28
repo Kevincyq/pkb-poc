@@ -1,43 +1,26 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Input, message, Empty, Spin, Modal, Tag } from 'antd';
+import { message, Empty, Spin, Modal } from 'antd';
 import { HomeOutlined } from '@ant-design/icons';
 import MainLayout from '../../components/Layout/MainLayout';
 import DocumentCard from '../../components/Document/DocumentCard';
 import { getCategoryDocuments } from '../../services/collectionService';
 import type { CollectionDocument } from '../../types/collection';
 import styles from './Detail.module.css';
-import { formatDateTime } from '../../utils/dateUtils';
 import PreviewContent from '../../components/PreviewContent';
-
-const { Search } = Input;
 
 export default function CollectionDetail() {
   const { categoryName } = useParams<{ categoryName: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [searchParams] = useSearchParams();
-  const [searchQuery, setSearchQuery] = useState('');
   const [previewDocument, setPreviewDocument] = useState<CollectionDocument | null>(null);
   const [highlightContentId, setHighlightContentId] = useState<string | null>(null);
 
-  // 处理URL中的highlight参数
-  useEffect(() => {
-    const highlight = searchParams.get('highlight');
-    if (highlight) {
-      setHighlightContentId(highlight);
-      // 清除URL中的highlight参数，避免刷新时重复高亮
-      const newSearchParams = new URLSearchParams(searchParams);
-      newSearchParams.delete('highlight');
-      navigate(`/collection/${categoryName}?${newSearchParams.toString()}`, { replace: true });
-    }
-  }, [searchParams, categoryName, navigate]);
-
   // 获取合集文档
   const { data, isLoading, error } = useQuery({
-    queryKey: ['categoryDocuments', categoryName, searchQuery],
-    queryFn: () => getCategoryDocuments(categoryName || '', searchQuery),
+    queryKey: ['categoryDocuments', categoryName],
+    queryFn: () => getCategoryDocuments(categoryName || ''),
     enabled: !!categoryName,
   });
 
@@ -61,10 +44,6 @@ export default function CollectionDetail() {
     }
   }, [highlightContentId, data, isLoading]);
 
-  const handleSearch = (value: string) => {
-    setSearchQuery(value);
-  };
-
   const handleDocumentClick = (document: CollectionDocument) => {
     // 打开预览模态框
     setPreviewDocument(document);
@@ -74,7 +53,7 @@ export default function CollectionDetail() {
     // 删除成功后，使用 React Query 刷新数据
     console.log('📋 Parent received delete notification for document ID:', deletedId);
     queryClient.invalidateQueries({
-      queryKey: ['categoryDocuments', categoryName, searchQuery]
+      queryKey: ['categoryDocuments', categoryName]
     });
     console.log('🔄 Query invalidated, data should refresh');
   };
@@ -108,18 +87,11 @@ export default function CollectionDetail() {
             style={{ cursor: 'pointer', display: 'flex', alignItems: 'center' }}
           >
             <HomeOutlined style={{ marginRight: '4px' }} />
-            个人知识库助理
+            Inspiration AI
           </span>
           <span>/</span>
           <span style={{ color: '#333' }}>{categoryName}</span>
         </div>
-
-        <Search
-          placeholder="搜索文档..."
-          allowClear
-          onSearch={handleSearch}
-          style={{ width: 250 }}
-        />
       </div>
 
       {/* 文档卡片网格区域 */}
@@ -153,7 +125,7 @@ export default function CollectionDetail() {
         ) : (
           <Empty
             style={{ padding: '40px' }}
-            description={searchQuery ? "未找到相关文档" : "暂无文档"}
+            description="暂无文档"
           />
         )}
       </div>

@@ -20,12 +20,14 @@ interface QAAssistantProps {
   visible: boolean;
   onClose: () => void;
   initialQuestion?: string; // 初始问题（从输入框传入）
+  selectedCategories?: string[]; // 选中的分类
 }
 
 export default function QAAssistant({ 
   visible, 
   onClose, 
-  initialQuestion 
+  initialQuestion,
+  selectedCategories
 }: QAAssistantProps) {
   const [messages, setMessages] = useState<QAMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -84,8 +86,8 @@ export default function QAAssistant({
 
     try {
       // 调用问答API
-      console.log('🚀 开始调用问答API，问题:', messageText);
-      const response: QAResponse = await qaService.askQuestion(messageText);
+      console.log('🚀 开始调用问答API，问题:', messageText, '分类:', selectedCategories);
+      const response: QAResponse = await qaService.askQuestion(messageText, selectedCategories ? { categories: selectedCategories } : undefined);
       console.log('✅ 成功收到API响应:', response);
 
       // 添加AI回答消息（初始为空，准备打字机效果）

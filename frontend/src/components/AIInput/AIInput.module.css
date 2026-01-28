@@ -3,29 +3,108 @@
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  width: 90%;
-  max-width: 800px;
+  width: calc(100% - 48px); /* 减去左右padding */
+  max-width: 960px; /* 与分类区域等宽 */
   z-index: 1001; /* 确保在问答区域之上 */
-  /* 移除外层容器的所有装饰样式 */
+  background: transparent; /* 确保背景透明，不遮挡内容 */
+}
+
+.inputContainer {
+  position: relative;
+  width: 100%;
+}
+
+/* 分类选择胶囊按钮 */
+.categoryCapsule {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: #f5f5f5;
+  border: 1px solid #d9d9d9;
+  border-radius: 16px;
+  cursor: pointer;
+  z-index: 100; /* 提高z-index确保在最上层 */
+  transition: all 0.2s;
+  font-size: 12px;
+  color: #666;
+  pointer-events: auto; /* 确保可以点击 */
+  user-select: none; /* 防止文本选择 */
+}
+
+.categoryCapsule:hover {
+  background: #e6f4ff;
+  border-color: #1677ff;
+  color: #1677ff;
+}
+
+.capsuleText {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.capsuleIcon {
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+
+.categoryDropdown {
+  min-width: 200px;
+  z-index: 1002 !important; /* 确保下拉菜单在最上层 */
+}
+
+.categoryDropdown :global(.ant-dropdown-menu) {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.categoryDropdown :global(.ant-dropdown-menu-item) {
+  padding: 8px 12px;
+}
+
+.categoryDropdown :global(.ant-checkbox-wrapper) {
+  width: 100%;
+}
+
+.textAreaWrapper {
+  position: relative;
+  width: 100%;
+  pointer-events: none; /* 让TextArea不拦截点击事件 */
+}
+
+.textAreaWrapper :global(.ant-input) {
+  pointer-events: auto; /* TextArea本身可以接收输入 */
 }
 
 .input {
   border-radius: 8px;
-  padding: 12px;
+  padding: 20px 50px 20px 16px; /* 右侧留出发送按钮空间，左侧正常padding，文本从最左边开始 */
   font-size: 14px;
   border: 1px solid #d9d9d9;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   background: white;
+  resize: none; /* 禁止手动调整大小 */
+  line-height: 1.6;
+  min-height: 80px; /* 增加最小高度 */
+  text-indent: 0; /* 确保文本从最左边开始 */
 }
 
-.input:hover {
+.input:focus {
   border-color: #1677ff;
+  box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.1);
 }
 
 .sendIcon {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
   color: #1677ff;
   cursor: pointer;
   font-size: 18px;
+  z-index: 10;
+  transition: color 0.2s;
 }
 
 .sendIcon:hover {
@@ -36,27 +115,49 @@
 @media (max-width: 768px) {
   .wrapper {
     bottom: 16px;
-    width: 95%;
+    width: calc(100% - 24px); /* 减去左右padding */
+    max-width: 100%;
+  }
+  
+  .categoryCapsule {
+    left: 12px;
+    bottom: 12px;
+    padding: 5px 10px;
+    font-size: 11px;
   }
   
   .input {
     font-size: 16px; /* 防止iOS缩放 */
-    padding: 14px;
-    min-height: 48px;
+    padding: 20px 50px 20px 16px; /* 右侧留出发送按钮空间，左侧正常padding，文本从最左边开始 */
+    min-height: 80px; /* 增加最小高度 */
   }
   
   .sendIcon {
+    right: 12px;
+    bottom: 12px;
     font-size: 20px;
-    padding: 4px;
   }
 }
 
 @media (max-width: 480px) {
   .wrapper {
-    width: 98%;
+    width: calc(100% - 16px); /* 减去左右padding */
+  }
+  
+  .categoryCapsule {
+    left: 8px;
+    bottom: 8px;
+    padding: 4px 8px;
+    font-size: 10px;
   }
   
   .input {
-    padding: 12px;
+    padding: 20px 50px 20px 16px; /* 右侧留出发送按钮空间，左侧正常padding，文本从最左边开始 */
+    min-height: 80px; /* 增加最小高度 */
+  }
+  
+  .sendIcon {
+    right: 8px;
+    bottom: 8px;
   }
 }

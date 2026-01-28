@@ -37,13 +37,16 @@
 
 .cardTitle {
   padding: 12px 16px 8px;
+  padding-top: 16px;
+  min-height: 72px;
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  position: relative;
 }
 
 .titleText {
-  font-size: 14px;
+  font-size: 18px; /* 再放大一号：从16px到18px */
   font-weight: 500;
   color: #1f1f1f;
   line-height: 20px;
@@ -54,9 +57,11 @@
 
 .customCardTitle {
   padding: 12px 16px;
+  padding-top: 16px;
+  min-height: 72px;
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   position: relative;
 }
 
@@ -80,12 +85,18 @@
 .customIconArea {
   flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: flex-start;
+  justify-content: flex-start;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #fff;
-  font-size: 32px;
-  padding: 40px 0;
+  min-height: 120px;
+}
+
+.systemIconArea {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .cardFooter {
@@ -137,9 +148,13 @@
   }
   
   .customIconArea {
-    font-size: 28px;
-    padding: 30px 0;
+    min-height: 100px;
     width: 100%;
+  }
+  
+  .cardTitle,
+  .customCardTitle {
+    min-height: 64px;
   }
   
   .cardFooter {
@@ -173,9 +188,13 @@
   }
   
   .customIconArea {
-    font-size: 24px;
-    padding: 25px 0;
+    min-height: 80px;
     width: 100%;
+  }
+  
+  .cardTitle,
+  .customCardTitle {
+    min-height: 56px;
   }
   
   .cardFooter,

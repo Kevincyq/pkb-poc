@@ -32,6 +32,7 @@ export interface QARequest {
   model?: string;
   search_type?: 'keyword' | 'semantic' | 'hybrid';
   category_filter?: string;
+  categories?: string[]; // 支持多个分类
 }
 
 export interface QAResponse {

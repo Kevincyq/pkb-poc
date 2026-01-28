@@ -1,124 +1,110 @@
-import axios from 'axios';
+/**
+ * API服务 - 使用Mock数据模式
+ * 当后端API未完成时，使用mock数据方便本地调试
+ * 
+ * 要切换到真实API，设置环境变量: VITE_USE_MOCK_API=false
+ */
 
-// 检查环境变量
-console.log('🔍 Environment check:', {
-  'import.meta.env.DEV': import.meta.env.DEV,
-  'import.meta.env.PROD': import.meta.env.PROD,
-  'import.meta.env.MODE': import.meta.env.MODE,
-  'import.meta.env.VITE_API_BASE_URL': import.meta.env.VITE_API_BASE_URL,
-  'window.location': window.location.href
-});
+import axios, { AxiosRequestConfig, AxiosResponse, AxiosInstance } from 'axios';
+import mockApi from './mockApi';
 
-// API基础URL配置
-// 强制使用代理路径，避免混合内容问题
-// 永远使用 /api 路径，让Vercel代理到后端
-const baseURL = '/api';
-const finalBaseURL = '/api';
-console.log('🎯 Selected baseURL:', baseURL);
-console.log('🔧 Final baseURL:', finalBaseURL);
+// 检查是否使用Mock API（默认使用Mock）
+const USE_MOCK_API = import.meta.env.VITE_USE_MOCK_API !== 'false';
 
-const api = axios.create({
-  baseURL: finalBaseURL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  // 强制使用HTTPS，防止Mixed Content错误
-  httpsAgent: false,
-  maxRedirects: 0, // 禁用自动重定向，防止HTTPS->HTTP
-  // 禁用URL规范化，避免自动添加尾随斜杠
-  validateStatus: (status) => status < 600,
-});
+console.log('🔧 API Mode:', USE_MOCK_API ? 'MOCK (本地调试模式)' : 'REAL (真实API)');
 
-// 请求拦截器
-api.interceptors.request.use(
-  (config) => {
-    // ✅ 强制移除URL尾随斜杠（避免FastAPI路由问题）
-    if (config.url && config.url.length > 1) {
-      config.url = config.url.replace(/\/+$/, '');  // 移除所有尾随斜杠
-      console.log('🔧 Cleaned URL:', config.url);
-    }
-    
-    // ✅ 自动添加认证头（如果存在token）
-    const token = localStorage.getItem('auth_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-      console.log('🔐 Added auth header');
-    } else {
-      console.log('⚠️ No auth token found');
-    }
-    
-    console.log('🌐 Request:', config.method?.toUpperCase(), config.url);
-    return config;
-  },
-  (error) => {
-    console.error('❌ Request error:', error);
-    return Promise.reject(error);
-  }
-);
+// 创建API实例
+let api: AxiosInstance | any;
 
-// 响应拦截器
-api.interceptors.response.use(
-  (response) => {
-    // 成功响应直接返回
-    return response;
-  },
-  async (error) => {
-    if (!error.response) {
-      // 网络错误
-      console.error('❌ Network error:', error.message);
+if (USE_MOCK_API) {
+  // 创建兼容axios接口的mock API包装器
+  api = {
+    get: <T = any>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> => {
+      console.log('🎭 [MOCK] GET:', url);
+      return mockApi.get<T>(url, config);
+    },
+    post: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> => {
+      console.log('🎭 [MOCK] POST:', url, data);
+      return mockApi.post<T>(url, data, config);
+    },
+    put: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> => {
+      console.log('🎭 [MOCK] PUT:', url, data);
+      return mockApi.put<T>(url, data, config);
+    },
+    delete: <T = any>(url: string, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> => {
+      console.log('🎭 [MOCK] DELETE:', url);
+      return mockApi.delete<T>(url, config);
+    },
+    // 为了兼容性，添加其他axios方法
+    patch: <T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<AxiosResponse<T>> => {
+      console.log('🎭 [MOCK] PATCH:', url, data);
+      return mockApi.put<T>(url, data, config);
+    },
+    interceptors: {
+      request: { use: () => {}, eject: () => {} },
+      response: { use: () => {}, eject: () => {} },
+    },
+  };
+} else {
+  // 使用真实API
+  // API基础URL配置
+  const baseURL = '/api';
+  const finalBaseURL = '/api';
+  console.log('🎯 Selected baseURL:', baseURL);
+  console.log('🔧 Final baseURL:', finalBaseURL);
+
+  api = axios.create({
+    baseURL: finalBaseURL,
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    httpsAgent: false,
+    maxRedirects: 0,
+    validateStatus: (status) => status < 600,
+  });
+
+  // 请求拦截器
+  api.interceptors.request.use(
+    (config: any) => {
+      if (config.url && config.url.length > 1) {
+        config.url = config.url.replace(/\/+$/, '');
+        console.log('🔧 Cleaned URL:', config.url);
+      }
+      
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+        console.log('🔐 Added auth header');
+      }
+      
+      console.log('🌐 Request:', config.method?.toUpperCase(), config.url);
+      return config;
+    },
+    (error: any) => {
+      console.error('❌ Request error:', error);
       return Promise.reject(error);
     }
+  );
 
-    const status = error.response.status;
-    const errorDetail = error.response.data?.detail || '';
-    const errorUrl = error.config?.url || '';
-    
-    console.error(`❌ API Error [${status}]:`, errorUrl, errorDetail);
-    
-    // ✅ 处理401错误
-    if (status === 401) {
-      // 检查是否是在认证页面
-      const isAuthPage = window.location.pathname === '/login' || 
-                        window.location.pathname === '/auth/callback';
-      
-      if (isAuthPage) {
-        console.log('ℹ️ 401 in auth page - ignoring');
+  // 响应拦截器
+  api.interceptors.response.use(
+    (response: any) => {
+      return response;
+    },
+    async (error: any) => {
+      if (!error.response) {
+        console.error('❌ Network error:', error.message);
         return Promise.reject(error);
       }
+
+      const status = error.response.status;
+      const errorDetail = error.response.data?.detail || '';
+      const errorUrl = error.config?.url || '';
       
-      // 检查token是否存在
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
-        console.log('⚠️ No token - user not logged in');
-        return Promise.reject(error);
-      }
-      
-      // ✅ 检查是否是明确的认证失败（而不是路由不存在）
-      const isAuthFailure = errorDetail.includes('authorization header') || 
-                           errorDetail.includes('Missing') ||
-                           errorDetail.includes('Invalid token') ||
-                           errorDetail.includes('User not found');
-      
-      if (isAuthFailure) {
-        console.log('🔐 Authentication failure - logging out');
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('auth_user');
-        localStorage.removeItem('cloud_connected');
-        
-        setTimeout(() => {
-          if (window.location.pathname !== '/login') {
-            window.location.href = '/login';
-          }
-        }, 1500);
-      } else {
-        // ✅ 路由不存在或其他原因导致的401，静默忽略
-        console.log('ℹ️ 401 from route issue, ignoring:', errorUrl);
-      }
+      console.error(`❌ API Error [${status}]:`, errorUrl, errorDetail);
+      return Promise.reject(error);
     }
-    
-    // 其他错误
-    return Promise.reject(error);
-  }
-);
+  );
+}
 
 export default api;
